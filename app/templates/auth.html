@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>访问验证 - Blind Watermark Web</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        .auth-page {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background: var(--fi-bg);
+        }
+
+        .auth-card {
+            width: 100%;
+            max-width: 380px;
+            background: var(--fi-card-bg);
+            border: 1px solid var(--fi-border);
+            border-radius: var(--fi-radius-md);
+            box-shadow: var(--fi-shadow-soft);
+            padding: var(--fi-space-7);
+        }
+
+        .auth-card h1 {
+            font-size: var(--fi-font-size-xl);
+            font-weight: var(--fi-font-weight-semibold);
+            color: var(--fi-text-heading);
+            margin: 0 0 var(--fi-space-2);
+        }
+
+        .auth-card p {
+            font-size: var(--fi-font-size-sm);
+            color: var(--fi-text-muted);
+            margin: 0 0 var(--fi-space-6);
+        }
+
+        .auth-input {
+            width: 100%;
+            height: var(--fi-control-height-md);
+            padding: 0 var(--fi-space-3);
+            border: 1px solid var(--fi-form-border);
+            border-radius: var(--fi-input-radius);
+            background: var(--fi-form-bg);
+            color: var(--fi-form-text);
+            font-family: var(--fi-font-base);
+            font-size: var(--fi-font-size-md);
+            outline: none;
+            transition: border-color 0.16s, box-shadow 0.16s;
+        }
+
+        .auth-input:focus {
+            border-color: var(--fi-form-border-focus);
+            box-shadow: var(--fi-form-focus-ring);
+        }
+
+        .auth-btn {
+            width: 100%;
+            height: var(--fi-control-height-md);
+            border: 1px solid var(--fi-primary);
+            border-radius: var(--fi-radius-sm);
+            background: var(--fi-primary);
+            color: #fff;
+            font-family: var(--fi-font-base);
+            font-size: var(--fi-font-size-md);
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.16s;
+        }
+
+        .auth-btn:hover {
+            background: var(--fi-primary-hover);
+        }
+
+        .auth-error {
+            font-size: var(--fi-font-size-sm);
+            color: var(--fi-danger);
+            margin-top: var(--fi-space-3);
+        }
+    </style>
+</head>
+
+<body class="auth-page">
+    <div class="auth-card">
+        <h1>盲水印</h1>
+        <p>需要输入密钥才可以使用哦</p>
+        <div style="margin-bottom:var(--fi-space-4)">
+            <input type="password" class="auth-input" id="keyInput" placeholder="输入密钥" autofocus>
+        </div>
+        <button class="auth-btn" id="authBtn">验证</button>
+        <div class="auth-error" id="errorMsg"></div>
+    </div>
+    <script nonce="auth-page">
+        document.getElementById('keyInput').addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') submit();
+        });
+        document.getElementById('authBtn').addEventListener('click', submit);
+        function submit() {
+            var key = document.getElementById('keyInput').value.trim();
+            if (!key) return;
+            var btn = document.getElementById('authBtn');
+            btn.disabled = true;
+            btn.textContent = '验证中...';
+            fetch('/?key=' + encodeURIComponent(key))
+                .then(function (r) {
+                    if (r.ok) { window.location.href = '/?key=' + encodeURIComponent(key); }
+                    else { document.getElementById('errorMsg').textContent = '密钥无效'; btn.disabled = false; btn.textContent = '验证'; }
+                })
+                .catch(function () {
+                    document.getElementById('errorMsg').textContent = '请求失败'; btn.disabled = false; btn.textContent = '验证';
+                });
+        }
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>盲水印</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+
+<body>
+  <div class="bwm-app">
+
+    <!-- ═══ Navbar ═══ -->
+    <nav class="bwm-nav">
+      <a href="/" class="bwm-nav-brand">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2L2 7l10 5 10-5-10-5z" />
+          <path d="M2 17l10 5 10-5" />
+          <path d="M2 12l10 5 10-5" />
+        </svg>
+        盲水印
+      </a>
+      <a href="https://github.com/ZaiHuaOvO/blind_watermark_web" target="_blank" class="bwm-nav-github"
+        title="GitHub 仓库">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+          <path
+            d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+        </svg>
+      </a>
+    </nav>
+
+    <!-- ═══ Main ═══ -->
+    <main class="bwm-main">
+
+      <!-- Modal Overlay -->
+      <div class="bwm-modal-overlay" id="modalOverlay" onclick="closeModal(event)">
+        <div class="bwm-modal" id="modalBox">
+          <div class="bwm-modal-header">
+            <span class="bwm-modal-title" id="modalTitle">确认</span>
+            <button class="bwm-modal-close" onclick="closeModal()">&times;</button>
+          </div>
+          <div class="bwm-modal-body" id="modalBody">确定执行此操作？</div>
+          <div class="bwm-modal-footer" id="modalFooter">
+            <button class="bwm-btn" onclick="closeModal()">取消</button>
+            <button class="bwm-btn bwm-btn--solid bwm-btn--danger" id="modalConfirmBtn">确定</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Lightbox -->
+      <div class="bwm-lightbox" id="lightbox" onclick="closeLightbox()">
+        <button class="bwm-lightbox-close">&times;</button>
+        <img class="bwm-lightbox-img" id="lightboxImg" src="" alt="放大预览">
+      </div>
+
+      <!-- Tab Bar -->
+      <div class="bwm-tab-bar">
+        <button class="bwm-tab bwm-tab--active" data-tab="single">单图处理</button>
+        <button class="bwm-tab" data-tab="batch">批量处理</button>
+        <button class="bwm-tab" data-tab="history">历史队列</button>
+      </div>
+
+      <!-- ═══════ Tab: 单图处理 ═══════ -->
+      <div class="bwm-tab-content bwm-tab-content--active" id="tab-single">
+        <div class="bwm-row">
+          <!-- 写入 -->
+          <div class="bwm-card">
+            <div class="bwm-card-title">写入盲水印</div>
+
+            <div class="bwm-form-group">
+              <label class="bwm-label">水印文本 <span style="color:var(--fi-danger)">*</span></label>
+              <input type="text" class="bwm-input" id="embedTextSingle" placeholder="输入要嵌入的水印文本">
+            </div>
+
+            <div class="bwm-form-group">
+              <label class="bwm-label">
+                嵌入密码
+                <span class="bwm-text-caption">（可选）</span>
+              </label>
+              <input type="password" class="bwm-input" id="embedPwdSingle" placeholder="留空使用默认密码">
+            </div>
+
+            <div class="bwm-form-group">
+              <label class="bwm-label">选择图片</label>
+              <input type="file" class="bwm-input-file" id="embedFileSingle" accept="image/jpeg,image/png,image/webp"
+                multiple>
+              <div class="bwm-thumb-grid" id="embedPreviewSingle"></div>
+            </div>
+
+            <button class="bwm-btn bwm-btn--solid bwm-btn--block" id="embedBtnSingle" data-action="submitEmbedSingle">
+              开始嵌入
+            </button>
+
+            <div id="embedResultSingle" class="bwm-mt-3"></div>
+          </div>
+
+          <!-- 提取 -->
+          <div class="bwm-card">
+            <div class="bwm-card-title">提取盲水印</div>
+
+            <div class="bwm-form-group">
+              <label class="bwm-label">选择图片</label>
+              <input type="file" class="bwm-input-file" id="extractFileSingle" accept="image/jpeg,image/png,image/webp"
+                multiple>
+              <div class="bwm-thumb-grid" id="extractPreviewSingle"></div>
+            </div>
+
+            <div class="bwm-form-group">
+              <label class="bwm-label">
+                提取密码
+                <span class="bwm-text-caption">（可选）</span>
+              </label>
+              <input type="password" class="bwm-input" id="extractPwdSingle" placeholder="留空使用默认密码">
+            </div>
+
+            <button class="bwm-btn bwm-btn--solid bwm-btn--block" id="extractBtnSingle"
+              data-action="submitExtractSingle">
+              开始提取
+            </button>
+
+            <div id="extractResultSingle" class="bwm-mt-3"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════ Tab: 批量处理 ═══════ -->
+      <div class="bwm-tab-content" id="tab-batch">
+        <div class="bwm-row">
+          <!-- 批量写入 -->
+          <div class="bwm-card">
+            <div class="bwm-card-title">批量写入盲水印</div>
+
+            <div class="bwm-form-group">
+              <label class="bwm-label">水印文本 <span style="color:var(--fi-danger)">*</span></label>
+              <input type="text" class="bwm-input" id="embedTextBatch" placeholder="输入要嵌入的水印文本">
+            </div>
+
+            <div class="bwm-form-group">
+              <label class="bwm-label">
+                嵌入密码
+                <span class="bwm-text-caption">（可选）</span>
+              </label>
+              <input type="password" class="bwm-input" id="embedPwdBatch" placeholder="留空使用默认密码">
+            </div>
+
+            <div class="bwm-form-group">
+              <label class="bwm-label">选择多张图片</label>
+              <input type="file" class="bwm-input-file" id="embedFileBatch" accept="image/jpeg,image/png,image/webp"
+                multiple>
+              <div class="bwm-thumb-grid" id="embedPreviewBatch"></div>
+            </div>
+
+            <button class="bwm-btn bwm-btn--solid bwm-btn--block" id="embedBtnBatch" data-action="submitEmbedBatch">
+              批量嵌入
+            </button>
+
+            <div id="embedResultBatch" class="bwm-mt-3"></div>
+          </div>
+
+          <!-- 批量提取 -->
+          <div class="bwm-card">
+            <div class="bwm-card-title">批量提取盲水印</div>
+
+            <div class="bwm-form-group">
+              <label class="bwm-label">
+                提取密码
+                <span class="bwm-text-caption">（可选）</span>
+              </label>
+              <input type="password" class="bwm-input" id="extractPwdBatch" placeholder="留空使用默认密码">
+            </div>
+
+            <div class="bwm-form-group">
+              <label class="bwm-label">选择多张图片</label>
+              <input type="file" class="bwm-input-file" id="extractFileBatch" accept="image/jpeg,image/png,image/webp"
+                multiple>
+              <div class="bwm-thumb-grid" id="extractPreviewBatch"></div>
+            </div>
+
+            <button class="bwm-btn bwm-btn--solid bwm-btn--block" id="extractBtnBatch" data-action="submitExtractBatch">
+              批量提取
+            </button>
+
+            <div id="extractResultBatch" class="bwm-mt-3"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════ Tab: 历史队列 ═══════ -->
+      <div class="bwm-tab-content" id="tab-history">
+        <div class="bwm-card">
+          <div class="bwm-flex-between bwm-mb-4">
+            <div class="bwm-card-title bwm-mb-0">历史记录</div>
+            <span class="bwm-text-caption" id="storageInfo">加载中...</span>
+          </div>
+
+          <p class="bwm-text-caption bwm-mb-3" style="margin-top:-8px;">
+            存储在本地浏览器（IndexedDB），仅自己可见。清除浏览器数据会丢失。
+          </p>
+
+          <div class="bwm-flex bwm-gap-3 bwm-mb-3">
+            <input type="text" class="bwm-input" id="historySearch" placeholder="搜索文件名或水印文本..." style="max-width:360px;"
+              oninput="loadHistory(1)">
+            <button class="bwm-btn bwm-btn--danger" data-action="clearAllHistory" style="margin-left:auto;">
+              清空所有
+            </button>
+          </div>
+
+          <div class="bwm-table-wrap">
+            <table class="bwm-table">
+              <thead>
+                <tr>
+                  <th style="width:56px">预览</th>
+                  <th>原始文件</th>
+                  <th>水印文本</th>
+                  <th style="width:150px">时间</th>
+                  <th style="width:100px">操作</th>
+                </tr>
+              </thead>
+              <tbody id="historyTableBody">
+                <tr>
+                  <td colspan="5" class="bwm-text-center bwm-text-muted" style="padding:24px;">暂无历史记录</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="bwm-pagination" id="historyPagination"></div>
+        </div>
+      </div>
+
+    </main>
+
+    <!-- ═══ Footer ═══ -->
+    <footer class="bwm-footer">
+      <p>
+
+        本项目完全基于开源项目 <a href="https://github.com/guofei9987/blind_watermark" target="_blank"
+          style="text-decoration:underline;text-underline-offset:2px;"><svg width="14" height="14" viewBox="0 0 24 24"
+            fill="currentColor" style="vertical-align:middle;margin-right:4px;">
+            <path
+              d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+          </svg>blind_watermark</a> 实现
+      </p>
+      <p>不会对图片做任何服务器存储，处理后马上删除</p>
+      <p>网站仅供学习交流使用，不对任何版权、安全性问题负责</p>
+    </footer>
+
+    <!-- ═══ Toast Container ═══ -->
+    <div class="bwm-toast-container" id="toastContainer"></div>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="/static/js/history-db.js"></script>
+  <script src="/static/js/download.js"></script>
+  <script src="/static/js/app.js"></script>
+</body>
+
+</html>
