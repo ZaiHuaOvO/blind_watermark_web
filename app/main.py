@@ -1,11 +1,10 @@
-
 """
 Application entry point.
 
-Stateless server with:
+Stateless server:
   1. Access key authentication
   2. Concurrency control (Semaphore 2)
-  3. No file persistence (process and delete)
+  3. No file persistence
 """
 
 import os
@@ -17,18 +16,17 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api import watermark
 
-ACCESS_KEY = os.environ.get("ACCESS_KEY", "20230412")
+ACCESS_KEY = os.environ.get("ACCESS_KEY", "change-me-in-production")
 process_semaphore = asyncio.Semaphore(2)
 
 app = FastAPI(
-    title="盲水印",
+    title="Blind Watermark Web",
     description="Blind watermark tool - stateless server",
     version="0.1.0",
 )
 
 @app.middleware("http")
 async def access_key_middleware(request: Request, call_next):
-    """Access key validation middleware."""
     if request.url.path in ("/", "/health") and request.method == "GET":
         return await call_next(request)
     if request.url.path.startswith("/static/"):
@@ -50,7 +48,6 @@ app.state.process_semaphore = process_semaphore
 
 @app.get("/")
 async def index(request: Request):
-    """Main page. Shows auth page if no key, renders app if key valid."""
     key = request.query_params.get("key", "")
 
     if not key:
@@ -64,5 +61,4 @@ async def index(request: Request):
 
 @app.get("/health")
 async def health():
-    """Health check endpoint."""
     return {"status": "ok"}
