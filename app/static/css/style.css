@@ -132,6 +132,14 @@ a:hover { color: var(--fi-primary-hover); text-decoration: underline; }
   display: flex; align-items: center; gap: var(--fi-space-2);
 }
 .bwm-nav-brand:hover { text-decoration: none; color: var(--fi-primary); }
+.bwm-nav-home {
+  display: flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; border-radius: var(--fi-radius-sm);
+  color: var(--fi-text-muted);
+  transition: all var(--fi-motion-fast) var(--fi-ease-standard);
+  margin-right: 4px;
+}
+.bwm-nav-home:hover { background: var(--fi-surface-soft); color: var(--fi-primary); text-decoration: none; }
 .bwm-nav-github {
   display: flex; align-items: center; justify-content: center;
   width: 36px; height: 36px; border-radius: var(--fi-radius-sm);
