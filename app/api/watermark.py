@@ -1,8 +1,8 @@
 """
-水印 API 路由。
+Watermark API routes.
 
-所有接口均实现"用完即删"的临时文件策略。
-嵌入接口返回 base64 图片数据，不保留文件在服务器上。
+All interfaces implement "delete-after-use" temporary file strategy.
+Embed endpoints return base64 image data, no files retained on server.
 """
 
 from fastapi import APIRouter, UploadFile, File, Form, Request, HTTPException
@@ -56,10 +56,11 @@ async def extract_watermark(
             length = wm_length or params.get("wm_length")
 
             if length is None:
-                return {
-                    "text": "无法确定水印长度，请手动输入预计水印字符数，或确认该图片是否通过本工具生成",
-                    "success": False,
-                }
+                # Auto-detect watermark length
+                return blind_service.extract_auto(
+                    input_path=upload_path,
+                    password=password,
+                )
 
             return blind_service.extract(
                 input_path=upload_path,
@@ -127,10 +128,13 @@ async def extract_batch(
                 length = params.get("wm_length")
 
                 if not length:
+                    result = blind_service.extract_auto(
+                        input_path=upload_path,
+                        password=password,
+                    )
                     results.append({
                         "file_name": file.filename,
-                        "text": "无法确定水印长度",
-                        "success": False,
+                        **result,
                     })
                     continue
 

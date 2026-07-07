@@ -93,6 +93,10 @@ function handleFileInput(inputId, storeName) {
   var input = document.getElementById(inputId);
   if (!input.files.length) return;
   var store = imageStore[storeName];
+  // 单图模式：上传新图时直接覆盖旧图
+  if (storeName.indexOf('Single') >= 0) {
+    store.length = 0;
+  }
   Array.from(input.files).forEach(function (file) {
     var reader = new FileReader();
     reader.onload = function (e) {
@@ -130,6 +134,52 @@ function getFilesFromStore(storeName) {
 }
 
 // ══════════════════════════════════════════════════════
+//  Timeout & Cancel helpers
+// ══════════════════════════════════════════════════════
+
+var activeState = null;
+
+function startCancelableProcess(resultDivId) {
+  cleanupActiveProcess();
+  var controller = new AbortController();
+  var resultDiv = document.getElementById(resultDivId);
+
+  var cancelBar = document.createElement('div');
+  cancelBar.id = 'cancelBar-' + Date.now();
+  cancelBar.className = 'bwm-cancel-bar';
+  cancelBar.style.display = 'none';
+  cancelBar.innerHTML = '<span>处理已超过 30 秒，</span><button class="bwm-btn bwm-btn--sm bwm-btn--danger" id="cancelProcessBtn">取消处理</button>';
+  resultDiv.parentNode.appendChild(cancelBar);
+
+  var timeoutId = setTimeout(function () {
+    cancelBar.style.display = 'flex';
+  }, 30000);
+
+  document.getElementById('cancelProcessBtn').onclick = function () {
+    controller.abort();
+    cancelBar.innerHTML = '<span>正在取消...</span>';
+    clearTimeout(timeoutId);
+  };
+
+  activeState = { controller: controller, timeoutId: timeoutId, cancelBar: cancelBar };
+  return controller;
+}
+
+function cleanupActiveProcess() {
+  if (activeState) {
+    clearTimeout(activeState.timeoutId);
+    if (activeState.cancelBar && activeState.cancelBar.parentNode) {
+      activeState.cancelBar.remove();
+    }
+    activeState = null;
+  }
+}
+
+function isAbortError(e) {
+  return e && (e.name === 'AbortError' || e.code === 20);
+}
+
+// ══════════════════════════════════════════════════════
 //  Tab switching
 // ══════════════════════════════════════════════════════
 
@@ -144,7 +194,7 @@ function switchTab(tabId) {
 }
 
 // ══════════════════════════════════════════════════════
-//  Embed (single & batch share same logic per file)
+//  Embed (single & batch)
 // ══════════════════════════════════════════════════════
 
 async function submitEmbedSingle() {
@@ -155,16 +205,22 @@ async function submitEmbedSingle() {
   if (!text) { showToast('请输入水印文本', 'error'); return; }
   if (!files.length) { showToast('请选择图片', 'error'); return; }
   setLoading(btn, true);
+  cleanupActiveProcess();
   var resultDiv = document.getElementById('embedResultSingle');
   resultDiv.innerHTML = '';
-  var allResults = [], zipData = [];
+  var controller = startCancelableProcess('embedResultSingle');
+  var signal = controller.signal;
+  var allResults = [];
+  var zipData = [];
+  var cancelled = false;
   for (var i = 0; i < files.length; i++) {
+    if (signal.aborted) { cancelled = true; break; }
     var fd = new FormData();
     fd.append('text', text);
     fd.append('password', password);
     fd.append('file', files[i]);
     try {
-      var resp = await fetch(apiUrl('/api/watermark/embed'), { method: 'POST', body: fd });
+      var resp = await fetch(apiUrl('/api/watermark/embed'), { method: 'POST', body: fd, signal: signal });
       if (!resp.ok) throw new Error((await resp.json()).detail || '失败');
       var data = await resp.json();
       try {
@@ -175,7 +231,16 @@ async function submitEmbedSingle() {
       } catch (e) { console.warn('历史保存失败', e); }
       zipData.push({ base64Data: data.image_data, filename: data.output_name });
       allResults.push({ file_name: files[i].name, success: true, output_name: data.output_name, image_data: data.image_data });
-    } catch (e) { allResults.push({ file_name: files[i].name, success: false, error: e.message }); }
+    } catch (e) {
+      if (isAbortError(e)) { cancelled = true; break; }
+      allResults.push({ file_name: files[i].name, success: false, error: e.message });
+    }
+  }
+  cleanupActiveProcess();
+  if (cancelled) {
+    resultDiv.innerHTML = '<div class="bwm-alert bwm-alert--warning">处理已取消</div>';
+    setLoading(btn, false);
+    return;
   }
   var ok = allResults.filter(function (r) { return r.success; }).length;
   var fail = allResults.filter(function (r) { return !r.success; }).length;
@@ -189,14 +254,14 @@ async function submitEmbedSingle() {
   html += '</ul>';
   if (zipData.length > 1) html += '<div class="bwm-mt-3"><button class="bwm-btn bwm-btn--solid" onclick=\'downloadAsZip(' + JSON.stringify(zipData) + ',"watermarked.zip")\'>📦 批量下载 ZIP</button></div>';
   resultDiv.innerHTML = html;
-  if (fail === 0) showToast('嵌入成功！', 'success'); else showToast(fail + ' 张失败', 'warning');
+  if (fail === 0) showToast('嵌入成功！', 'success');
+  else showToast(fail + ' 张失败', 'warning');
   setLoading(btn, false);
 }
 
 async function submitEmbedBatch() {
   document.getElementById('embedTextBatch').value = document.getElementById('embedTextBatch').value;
   document.getElementById('embedBtnBatch').dataset.originalText = document.getElementById('embedBtnBatch').innerHTML;
-  // reuse same logic as single but with different store
   var text = document.getElementById('embedTextBatch').value.trim();
   var password = document.getElementById('embedPwdBatch').value.trim();
   var files = getFilesFromStore('embedBatch');
@@ -204,16 +269,22 @@ async function submitEmbedBatch() {
   if (!text) { showToast('请输入水印文本', 'error'); return; }
   if (!files.length) { showToast('请选择图片', 'error'); return; }
   setLoading(btn, true);
+  cleanupActiveProcess();
   var resultDiv = document.getElementById('embedResultBatch');
   resultDiv.innerHTML = '';
-  var allResults = [], zipData = [];
+  var controller = startCancelableProcess('embedResultBatch');
+  var signal = controller.signal;
+  var allResults = [];
+  var zipData = [];
+  var cancelled = false;
   for (var i = 0; i < files.length; i++) {
+    if (signal.aborted) { cancelled = true; break; }
     var fd = new FormData();
     fd.append('text', text);
     fd.append('password', password);
     fd.append('file', files[i]);
     try {
-      var resp = await fetch(apiUrl('/api/watermark/embed'), { method: 'POST', body: fd });
+      var resp = await fetch(apiUrl('/api/watermark/embed'), { method: 'POST', body: fd, signal: signal });
       if (!resp.ok) throw new Error('处理失败');
       var data = await resp.json();
       try {
@@ -224,7 +295,16 @@ async function submitEmbedBatch() {
       } catch (e) { console.warn('历史保存失败', e); }
       zipData.push({ base64Data: data.image_data, filename: data.output_name });
       allResults.push({ file_name: files[i].name, success: true, output_name: data.output_name, image_data: data.image_data });
-    } catch (e) { allResults.push({ file_name: files[i].name, success: false, error: e.message }); }
+    } catch (e) {
+      if (isAbortError(e)) { cancelled = true; break; }
+      allResults.push({ file_name: files[i].name, success: false, error: e.message });
+    }
+  }
+  cleanupActiveProcess();
+  if (cancelled) {
+    resultDiv.innerHTML = '<div class="bwm-alert bwm-alert--warning">处理已取消</div>';
+    setLoading(btn, false);
+    return;
   }
   var ok = allResults.filter(function (r) { return r.success; }).length;
   var fail = allResults.filter(function (r) { return !r.success; }).length;
@@ -238,7 +318,8 @@ async function submitEmbedBatch() {
   html += '</ul>';
   if (zipData.length > 1) html += '<div class="bwm-mt-3"><button class="bwm-btn bwm-btn--solid" onclick=\'downloadAsZip(' + JSON.stringify(zipData) + ',"watermarked_batch.zip")\'>📦 批量下载 ZIP</button></div>';
   resultDiv.innerHTML = html;
-  if (fail === 0) showToast('批量嵌入全部成功！', 'success'); else showToast(fail + ' 张失败', 'warning');
+  if (fail === 0) showToast('批量嵌入全部成功！', 'success');
+  else showToast(fail + ' 张失败', 'warning');
   setLoading(btn, false);
 }
 
@@ -252,19 +333,33 @@ async function submitExtractSingle() {
   var btn = document.getElementById('extractBtnSingle');
   if (!files.length) { showToast('请选择图片', 'error'); return; }
   setLoading(btn, true);
+  cleanupActiveProcess();
   var resultDiv = document.getElementById('extractResultSingle');
   resultDiv.innerHTML = '';
+  var controller = startCancelableProcess('extractResultSingle');
+  var signal = controller.signal;
   var results = [];
+  var cancelled = false;
   for (var i = 0; i < files.length; i++) {
+    if (signal.aborted) { cancelled = true; break; }
     var fd = new FormData();
     fd.append('password', password);
     fd.append('file', files[i]);
     try {
-      var resp = await fetch(apiUrl('/api/watermark/extract'), { method: 'POST', body: fd });
+      var resp = await fetch(apiUrl('/api/watermark/extract'), { method: 'POST', body: fd, signal: signal });
       if (!resp.ok) throw new Error('失败');
       var data = await resp.json();
       results.push({ file_name: files[i].name, text: data.text, success: data.success });
-    } catch (e) { results.push({ file_name: files[i].name, text: e.message, success: false }); }
+    } catch (e) {
+      if (isAbortError(e)) { cancelled = true; break; }
+      results.push({ file_name: files[i].name, text: e.message, success: false });
+    }
+  }
+  cleanupActiveProcess();
+  if (cancelled) {
+    resultDiv.innerHTML = '<div class="bwm-alert bwm-alert--warning">处理已取消</div>';
+    setLoading(btn, false);
+    return;
   }
   var html = '<ul class="bwm-result-list">';
   results.forEach(function (r) {
@@ -282,19 +377,33 @@ async function submitExtractBatch() {
   var btn = document.getElementById('extractBtnBatch');
   if (!files.length) { showToast('请选择图片', 'error'); return; }
   setLoading(btn, true);
+  cleanupActiveProcess();
   var resultDiv = document.getElementById('extractResultBatch');
   resultDiv.innerHTML = '';
+  var controller = startCancelableProcess('extractResultBatch');
+  var signal = controller.signal;
   var results = [];
+  var cancelled = false;
   for (var i = 0; i < files.length; i++) {
+    if (signal.aborted) { cancelled = true; break; }
     var fd = new FormData();
     fd.append('password', password);
     fd.append('file', files[i]);
     try {
-      var resp = await fetch(apiUrl('/api/watermark/extract'), { method: 'POST', body: fd });
+      var resp = await fetch(apiUrl('/api/watermark/extract'), { method: 'POST', body: fd, signal: signal });
       if (!resp.ok) throw new Error('失败');
       var data = await resp.json();
       results.push({ file_name: files[i].name, text: data.text, success: data.success });
-    } catch (e) { results.push({ file_name: files[i].name, text: e.message, success: false }); }
+    } catch (e) {
+      if (isAbortError(e)) { cancelled = true; break; }
+      results.push({ file_name: files[i].name, text: e.message, success: false });
+    }
+  }
+  cleanupActiveProcess();
+  if (cancelled) {
+    resultDiv.innerHTML = '<div class="bwm-alert bwm-alert--warning">处理已取消</div>';
+    setLoading(btn, false);
+    return;
   }
   var html = '<ul class="bwm-result-list">';
   results.forEach(function (r) {
@@ -363,6 +472,18 @@ async function clearAllHistory() {
 
 async function updateStorageInfo() {
   try { var info = await getStorageInfo(); document.getElementById('storageInfo').textContent = '共 ' + info.count + ' 条记录，占用 ' + info.totalSizeMB + ' MB'; } catch (e) { document.getElementById('storageInfo').textContent = '信息获取失败'; }
+}
+
+function resetAll() {
+  cleanupActiveProcess();
+  for (var key in imageStore) imageStore[key] = [];
+  ['embedPreviewSingle', 'extractPreviewSingle', 'embedPreviewBatch', 'extractPreviewBatch'].forEach(function (id) {
+    document.getElementById(id).innerHTML = '';
+  });
+  ['embedResultSingle', 'extractResultSingle', 'embedResultBatch', 'extractResultBatch'].forEach(function (id) {
+    document.getElementById(id).innerHTML = '';
+  });
+  showToast('工作队列已重置', 'info');
 }
 
 document.addEventListener('DOMContentLoaded', function () {

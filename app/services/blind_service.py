@@ -137,6 +137,35 @@ def embed(input_path: str, watermark_text: str, password: str = "", output_dir: 
     }
 
 
+def extract_auto(input_path: str, password: str = "") -> dict:
+    """自动检测水印长度并提取盲水印。
+
+    当无法从文件名获取水印长度时，尝试多种常见长度自动检测。
+    优先返回第一个不含乱码的有效文本。
+    """
+    password_int = _resolve_password(password)
+
+    # 常见水印长度候选集（比特数）
+    # 覆盖: 1~20 中文字符(UTF-8: 24n) + 1~30 ASCII字符(8n)
+    candidates = set()
+    for i in range(24, 481, 24):   # 1~20 中文字
+        candidates.add(i)
+    for i in range(8, 241, 8):     # 1~30 ASCII
+        candidates.add(i)
+    candidates = sorted(candidates)  # ~35 个
+
+    for wm_length in candidates:
+        try:
+            bwm = WaterMark(password_img=1, password_wm=password_int)
+            wm_extract = bwm.extract(filename=input_path, wm_shape=wm_length, mode="str")
+            if wm_extract and wm_extract.strip() and "�" not in wm_extract:
+                return {"text": wm_extract.strip(), "success": True, "wm_length": wm_length}
+        except Exception:
+            continue
+
+    return {"text": "无法自动检测水印长度，未能提取到盲水印", "success": False, "wm_length": None}
+
+
 def extract(input_path: str, wm_length: int, password: str = "") -> dict:
     """从图片中提取文本盲水印。
 

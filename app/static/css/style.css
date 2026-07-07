@@ -342,6 +342,19 @@ a:hover { color: var(--fi-primary-hover); text-decoration: underline; }
 .bwm-lightbox-close { position: absolute; top: var(--fi-space-5); right: var(--fi-space-5); background: none; border: none; color: #fff; font-size: 32px; cursor: pointer; opacity: 0.7; transition: opacity var(--fi-motion-fast) var(--fi-ease-standard); }
 .bwm-lightbox-close:hover { opacity: 1; }
 
+/* NEW: Cancel bar for long-running processes */
+.bwm-cancel-bar {
+  display: none; align-items: center; justify-content: center; gap: var(--fi-space-3);
+  padding: var(--fi-space-3) var(--fi-space-4);
+  margin-top: var(--fi-space-3);
+  background: var(--fi-warning-bg);
+  border: 1px solid var(--fi-warning);
+  border-radius: var(--fi-radius-sm);
+  color: var(--fi-text);
+  font-size: var(--fi-font-size-sm);
+  animation: fi-slide-in-right var(--fi-motion-normal) var(--fi-ease-standard);
+}
+
 /* NEW: Custom Modal (replaces browser confirm) */
 .bwm-modal-overlay {
   display: none; position: fixed; z-index: 9998;

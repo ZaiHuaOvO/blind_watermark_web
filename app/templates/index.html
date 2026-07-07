@@ -5,6 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>盲水印</title>
+  <link rel="icon" type="image/x-icon" href="https://api.flowersink.com/img/favicon.ico">
   <link rel="stylesheet" href="/static/css/style.css">
 </head>
 
@@ -79,13 +80,12 @@
                 嵌入密码
                 <span class="bwm-text-caption">（可选）</span>
               </label>
-              <input type="password" class="bwm-input" id="embedPwdSingle" placeholder="留空使用默认密码">
+              <input type="password" class="bwm-input" id="embedPwdSingle" placeholder="">
             </div>
 
             <div class="bwm-form-group">
               <label class="bwm-label">选择图片</label>
-              <input type="file" class="bwm-input-file" id="embedFileSingle" accept="image/jpeg,image/png,image/webp"
-                multiple>
+              <input type="file" class="bwm-input-file" id="embedFileSingle" accept="image/jpeg,image/png,image/webp">
               <div class="bwm-thumb-grid" id="embedPreviewSingle"></div>
             </div>
 
@@ -102,8 +102,7 @@
 
             <div class="bwm-form-group">
               <label class="bwm-label">选择图片</label>
-              <input type="file" class="bwm-input-file" id="extractFileSingle" accept="image/jpeg,image/png,image/webp"
-                multiple>
+              <input type="file" class="bwm-input-file" id="extractFileSingle" accept="image/jpeg,image/png,image/webp">
               <div class="bwm-thumb-grid" id="extractPreviewSingle"></div>
             </div>
 
@@ -112,7 +111,7 @@
                 提取密码
                 <span class="bwm-text-caption">（可选）</span>
               </label>
-              <input type="password" class="bwm-input" id="extractPwdSingle" placeholder="留空使用默认密码">
+              <input type="password" class="bwm-input" id="extractPwdSingle" placeholder="">
             </div>
 
             <button class="bwm-btn bwm-btn--solid bwm-btn--block" id="extractBtnSingle"
@@ -142,7 +141,7 @@
                 嵌入密码
                 <span class="bwm-text-caption">（可选）</span>
               </label>
-              <input type="password" class="bwm-input" id="embedPwdBatch" placeholder="留空使用默认密码">
+              <input type="password" class="bwm-input" id="embedPwdBatch" placeholder="">
             </div>
 
             <div class="bwm-form-group">
@@ -168,7 +167,7 @@
                 提取密码
                 <span class="bwm-text-caption">（可选）</span>
               </label>
-              <input type="password" class="bwm-input" id="extractPwdBatch" placeholder="留空使用默认密码">
+              <input type="password" class="bwm-input" id="extractPwdBatch" placeholder="">
             </div>
 
             <div class="bwm-form-group">
@@ -231,6 +230,11 @@
       </div>
 
     </main>
+
+    <!-- ── 重置工作队列 ── -->
+    <div class="bwm-text-center bwm-mt-3">
+      <button class="bwm-btn" data-action="resetAll">重置工作队列</button>
+    </div>
 
     <!-- ═══ Footer ═══ -->
     <footer class="bwm-footer">

@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api import watermark
 
-ACCESS_KEY = os.environ.get("ACCESS_KEY", "change-me-in-production")
+ACCESS_KEY = os.environ.get("ACCESS_KEY", "20230412")
 process_semaphore = asyncio.Semaphore(2)
 
 app = FastAPI(

@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>再花的工具集</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Quicksand', 'Noto Sans SC', 'PingFang SC', sans-serif;
+      background: linear-gradient(135deg, #fef9f0 0%, #fff5f5 50%, #f0f4ff 100%);
+      min-height: 100vh;
+      color: #4a3728;
+      overflow-x: hidden;
+    }
+
+    /* ── Floating shapes ── */
+    .bg-shapes {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 0;
+      overflow: hidden;
+    }
+
+    .bg-shape {
+      position: absolute;
+      border-radius: 50%;
+      opacity: 0.25;
+    }
+
+    .bg-shape:nth-child(1) {
+      width: 300px;
+      height: 300px;
+      background: #ffd6d6;
+      top: -80px;
+      right: -60px;
+      animation: float 8s ease-in-out infinite;
+    }
+
+    .bg-shape:nth-child(2) {
+      width: 200px;
+      height: 200px;
+      background: #ffe8b0;
+      bottom: 40px;
+      left: -40px;
+      animation: float 10s ease-in-out infinite reverse;
+    }
+
+    .bg-shape:nth-child(3) {
+      width: 150px;
+      height: 150px;
+      background: #b8d4ff;
+      top: 40%;
+      left: 60%;
+      animation: float 12s ease-in-out infinite 2s;
+    }
+
+    .bg-shape:nth-child(4) {
+      width: 100px;
+      height: 100px;
+      background: #c8e6c9;
+      bottom: 20%;
+      right: 10%;
+      animation: float 7s ease-in-out infinite 1s;
+    }
+
+    @keyframes float {
+
+      0%,
+      100% {
+        transform: translateY(0) rotate(0deg);
+      }
+
+      50% {
+        transform: translateY(-20px) rotate(8deg);
+      }
+    }
+
+    /* ── Layout ── */
+    .container {
+      position: relative;
+      z-index: 1;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 48px 24px;
+    }
+
+    /* ── Header ── */
+    header {
+      text-align: center;
+      margin-bottom: 48px;
+    }
+
+    header h1 {
+      font-size: 2.8rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #e8857a, #b47cbf, #7a9ecf);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 8px;
+      letter-spacing: -0.5px;
+    }
+
+    header p {
+      font-size: 1.05rem;
+      color: #8a7a6a;
+      font-weight: 500;
+    }
+
+    header .avatar {
+      display: inline-block;
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #ffb5b5, #b5a0d0, #90c0e0);
+      margin-bottom: 16px;
+      line-height: 72px;
+      font-size: 2rem;
+      box-shadow: 0 4px 16px rgba(142, 98, 68, 0.15);
+    }
+
+    /* ── Tool Grid ── */
+    .tool-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 20px;
+      margin-bottom: 40px;
+    }
+
+    .tool-card {
+      background: rgba(255, 255, 255, 0.7);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.6);
+      border-radius: 20px;
+      padding: 28px 20px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+      box-shadow: 0 4px 20px rgba(142, 98, 68, 0.06);
+      text-decoration: none;
+      display: block;
+      color: inherit;
+    }
+
+    .tool-card:hover {
+      transform: translateY(-6px);
+      box-shadow: 0 12px 36px rgba(142, 98, 68, 0.12);
+      background: rgba(255, 255, 255, 0.85);
+    }
+
+    .tool-card .icon {
+      font-size: 2.6rem;
+      margin-bottom: 12px;
+      display: block;
+    }
+
+    .tool-card .name {
+      font-size: 1.15rem;
+      font-weight: 600;
+      color: #4a3728;
+      margin-bottom: 4px;
+    }
+
+    .tool-card .desc {
+      font-size: 0.85rem;
+      color: #8a7a6a;
+      line-height: 1.5;
+    }
+
+    .tool-card .tag {
+      display: inline-block;
+      margin-top: 10px;
+      padding: 2px 12px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      background: #fff0e0;
+      color: #b08060;
+    }
+
+    /* ── Add new tool (placeholder) ── */
+    .tool-card.add-new {
+      border: 2px dashed #d0c0b0;
+      background: rgba(255, 255, 255, 0.3);
+      backdrop-filter: none;
+      cursor: default;
+      opacity: 0.6;
+    }
+
+    .tool-card.add-new:hover {
+      transform: none;
+      box-shadow: 0 4px 20px rgba(142, 98, 68, 0.06);
+    }
+
+    /* ── Footer ── */
+    footer {
+      text-align: center;
+      padding-top: 16px;
+      border-top: 1px solid rgba(180, 150, 130, 0.15);
+    }
+
+    footer p {
+      font-size: 0.85rem;
+      color: #a09080;
+      margin-bottom: 4px;
+    }
+
+    footer a {
+      color: #b08060;
+      text-decoration: none;
+      font-weight: 500;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 600px) {
+      header h1 {
+        font-size: 2rem;
+      }
+
+      .tool-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+
+      .tool-card {
+        padding: 20px 12px;
+      }
+
+      .tool-card .icon {
+        font-size: 2rem;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="bg-shapes">
+    <div class="bg-shape"></div>
+    <div class="bg-shape"></div>
+    <div class="bg-shape"></div>
+    <div class="bg-shape"></div>
+  </div>
+
+  <div class="container">
+    <header>
+      <div class="avatar">🌸</div>
+      <h1>再花的工具集</h1>
+      <p>一些有趣又实用的小工具 ✨</p>
+    </header>
+
+    <div class="tool-grid">
+      <a href="/blind-watermark" class="tool-card">
+        <div class="name">盲水印</div>
+
+        <div class="desc">为图片嵌入不可见的文字水印</div>
+        <div class="desc">支持密码验证</div>
+      </a>
+    </div>
+    <footer>
+      <p>所有工具均由基于/原创开源项目开发</p>
+      <p>所有操作均尽可能在客户端完成</p>
+      <p>By <a href="https://github.com/ZaiHuaOvO" target="_blank">再花</a></p>
+    </footer>
+  </div>
+</body>
+
+</html>
