@@ -1,327 +1,21 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>再花的工具集</title>
+  <title>再花的工具箱</title>
   <link rel="icon" type="image/x-icon" href="https://api.flowersink.com/img/favicon.ico">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    body {
-      font-family: 'Quicksand', 'Noto Sans SC', 'PingFang SC', sans-serif;
-      background: linear-gradient(135deg, #fef9f0 0%, #fff5f5 50%, #f0f4ff 100%);
-      min-height: 100vh;
-      color: #4a3728;
-      overflow-x: hidden;
-    }
-
-    /* ── Floating shapes ── */
-    .bg-shapes {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      pointer-events: none;
-      z-index: 0;
-      overflow: hidden;
-    }
-
-    .bg-shape {
-      position: absolute;
-      border-radius: 50%;
-      opacity: 0.25;
-    }
-
-    .bg-shape:nth-child(1) {
-      width: 300px;
-      height: 300px;
-      background: #ffd6d6;
-      top: -80px;
-      right: -60px;
-      animation: float 8s ease-in-out infinite;
-    }
-
-    .bg-shape:nth-child(2) {
-      width: 200px;
-      height: 200px;
-      background: #ffe8b0;
-      bottom: 40px;
-      left: -40px;
-      animation: float 10s ease-in-out infinite reverse;
-    }
-
-    .bg-shape:nth-child(3) {
-      width: 150px;
-      height: 150px;
-      background: #b8d4ff;
-      top: 40%;
-      left: 60%;
-      animation: float 12s ease-in-out infinite 2s;
-    }
-
-    .bg-shape:nth-child(4) {
-      width: 100px;
-      height: 100px;
-      background: #c8e6c9;
-      bottom: 20%;
-      right: 10%;
-      animation: float 7s ease-in-out infinite 1s;
-    }
-
-    @keyframes float {
-
-      0%,
-      100% {
-        transform: translateY(0) rotate(0deg);
-      }
-
-      50% {
-        transform: translateY(-20px) rotate(8deg);
-      }
-    }
-
-    /* ── Layout ── */
-    .container {
-      position: relative;
-      z-index: 1;
-      max-width: 860px;
-      margin: 0 auto;
-      padding: 36px 24px 48px;
-    }
-
-    /* ── Home button ── */
-    .home-btn {
-      position: fixed;
-      top: 18px;
-      left: 18px;
-      z-index: 100;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 8px 16px;
-      background: rgba(255, 255, 255, 0.75);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      border: 1px solid rgba(200, 180, 160, 0.35);
-      border-radius: 30px;
-      font-size: 0.85rem;
-      font-weight: 600;
-      color: #7a5a4a;
-      text-decoration: none;
-      font-family: inherit;
-      cursor: pointer;
-      transition: all 0.25s ease;
-      box-shadow: 0 2px 10px rgba(100, 70, 50, 0.08);
-    }
-
-    .home-btn:hover {
-      background: rgba(255, 255, 255, 0.95);
-      box-shadow: 0 4px 18px rgba(100, 70, 50, 0.14);
-      color: #5a3a2a;
-      transform: translateY(-1px);
-    }
-
-    .home-btn svg {
-      flex-shrink: 0;
-    }
-
-    /* ── Header ── */
-    header {
-      text-align: center;
-      margin-bottom: 40px;
-    }
-
-    header h1 {
-      font-size: 2.8rem;
-      font-weight: 700;
-      background: linear-gradient(135deg, #e8857a, #b47cbf, #7a9ecf);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      margin-bottom: 8px;
-      letter-spacing: -0.5px;
-    }
-
-    header p {
-      font-size: 1.05rem;
-      color: #8a7a6a;
-      font-weight: 500;
-    }
-
-    header .avatar {
-      display: inline-block;
-      width: 96px;
-      height: 96px;
-      border-radius: 50%;
-      overflow: hidden;
-      margin-bottom: 14px;
-      box-shadow: 0 4px 16px rgba(142, 98, 68, 0.15);
-    }
-
-    header .avatar img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      display: block;
-    }
-
-    /* ── Tool Grid ── */
-    .tool-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-      gap: 16px;
-      margin-bottom: 36px;
-    }
-
-    .tool-card {
-      background: rgba(255, 255, 255, 0.7);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border: 1px solid rgba(255, 255, 255, 0.6);
-      border-radius: 18px;
-      padding: 22px 16px 18px;
-      text-align: center;
-      cursor: pointer;
-      transition: all 0.3s cubic-bezier(0.22, 1, 0.36, 1);
-      box-shadow: 0 4px 18px rgba(142, 98, 68, 0.06);
-      text-decoration: none;
-      display: block;
-      color: inherit;
-    }
-
-    .tool-card:hover {
-      transform: translateY(-5px);
-      box-shadow: 0 10px 30px rgba(142, 98, 68, 0.12);
-      background: rgba(255, 255, 255, 0.88);
-    }
-
-    .tool-card .icon {
-      font-size: 2.2rem;
-      margin-bottom: 10px;
-      display: block;
-    }
-
-    .tool-card .name {
-      font-size: 1.05rem;
-      font-weight: 600;
-      color: #4a3728;
-      margin-bottom: 3px;
-    }
-
-    .tool-card .desc {
-      font-size: 0.8rem;
-      color: #8a7a6a;
-      line-height: 1.5;
-    }
-
-    .tool-card .tag {
-      display: inline-block;
-      margin-top: 8px;
-      padding: 2px 10px;
-      border-radius: 10px;
-      font-size: 0.7rem;
-      font-weight: 600;
-    }
-
-    .tool-card .tag-ready {
-      background: #e8f5e8;
-      color: #5a8a4a;
-    }
-
-    .tool-card .tag-coming {
-      background: #f0ece8;
-      color: #9a8a7a;
-    }
-
-    /* ── Placeholder card (waiting for development) ── */
-    .tool-card.placeholder {
-      border: 2px dashed #d0c0b0;
-      background: rgba(255, 255, 255, 0.3);
-      backdrop-filter: none;
-      cursor: default;
-    }
-
-    .tool-card.placeholder:hover {
-      transform: none;
-      box-shadow: 0 4px 18px rgba(142, 98, 68, 0.06);
-      background: rgba(255, 255, 255, 0.3);
-    }
-
-    .tool-card.placeholder .name {
-      color: #b0a090;
-    }
-
-    .tool-card.placeholder .desc {
-      color: #b8a898;
-    }
-
-    /* ── Footer ── */
-    footer {
-      text-align: center;
-      padding-top: 14px;
-      border-top: 1px solid rgba(180, 150, 130, 0.15);
-    }
-
-    footer p {
-      font-size: 0.85rem;
-      color: #a09080;
-      margin-bottom: 4px;
-    }
-
-    footer a {
-      color: #b08060;
-      text-decoration: none;
-      font-weight: 500;
-    }
-
-    footer a:hover {
-      text-decoration: underline;
-    }
-
-    /* ── Responsive ── */
-    @media (max-width: 600px) {
-      header h1 {
-        font-size: 2rem;
-      }
-
-      .tool-grid {
-        grid-template-columns: 1fr 1fr;
-        gap: 10px;
-      }
-
-      .tool-card {
-        padding: 16px 10px 14px;
-      }
-
-      .tool-card .icon {
-        font-size: 1.8rem;
-      }
-
-      .home-btn {
-        top: 10px;
-        left: 10px;
-        padding: 6px 12px;
-        font-size: 0.8rem;
-      }
-    }
-  </style>
+  <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
 </head>
-
 <body>
-  <!-- Back to home button -->
-  <a href="https://flowersink.com/" class="home-btn" title="再花の博客">
-    再花の博客
-  </a>
 
+  <!-- ═══ 花瓣容器 ═══ -->
+  <div id="petalContainer"></div>
+
+  <!-- ═══ 背景装饰 ═══ -->
   <div class="bg-shapes">
     <div class="bg-shape"></div>
     <div class="bg-shape"></div>
@@ -329,24 +23,38 @@
     <div class="bg-shape"></div>
   </div>
 
+  <!-- ═══ 返回博客 ═══ -->
+  <a href="https://flowersink.com/" class="home-btn" title="再花の博客">再花の博客</a>
+  <a href="javascript:void(0)" class="about-btn" title="关于工具箱">关于工具箱</a>
+
+  <!-- ═══ 主内容 ═══ -->
   <div class="container">
-    <header>
-      <div class="avatar">
-        <img src="https://api.flowersink.com/img/粉毛猫猫头.jpeg" alt="avatar">
+    <header data-aos="fade-down" data-aos-delay="100">
+      <div class="avatar-wrap">
+        <div class="avatar">
+          <img src="https://api.flowersink.com/img/粉毛猫猫头.jpeg" alt="avatar">
+        </div>
       </div>
       <h1>再花的工具箱</h1>
       <p>一些有趣又实用的小工具 ✨</p>
     </header>
 
     <div class="tool-grid">
-      <a href="/blind-watermark" class="tool-card">
+      <!-- 盲水印 -->
+      <div class="tool-card" onclick="window.location.href='/blind-watermark'" data-aos="fade-up" data-aos-delay="200">
+        <div class="corner-flap">
+          <a href="https://github.com/ZaiHuaOvO/blind_watermark_web" target="_blank" class="corner-github" onclick="event.stopPropagation();" title="GitHub 仓库">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+          </a>
+        </div>
         <span class="icon">🔒</span>
         <div class="name">盲水印</div>
         <div class="desc">为图片嵌入不可见的文字水印</div>
-        <div class="tag tag-ready">已上线</div>
-      </a>
+        <div class="bwm-tag-stack"><span class="tag tag-ready">可用</span></div>
+      </div>
 
-      <div class="tool-card placeholder">
+      <!-- 九宫格（等待开发） -->
+      <div class="tool-card placeholder" data-aos="fade-up" data-aos-delay="300">
         <span class="icon">🔲</span>
         <div class="name">一键生成九宫格</div>
         <div class="desc">将一张图切分成九宫格拼图</div>
@@ -354,12 +62,14 @@
       </div>
     </div>
 
-    <footer>
-      <p>所有工具均由为原创/基于开源项目开发</p>
+    <footer data-aos="fade-up" data-aos-delay="500">
+      <p>所有工具均为原创/基于开源项目开发</p>
       <p>所有操作均尽可能在客户端完成</p>
       <p>By <a href="https://github.com/ZaiHuaOvO" target="_blank">再花</a></p>
     </footer>
   </div>
-</body>
 
+  <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+  <script src="script.js"></script>
+</body>
 </html>
