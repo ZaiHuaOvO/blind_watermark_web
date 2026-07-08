@@ -63,12 +63,16 @@ uvicorn app.main:app --host 127.0.0.1 --port 8001 --workers 1
 
 ```
 blind_watermark_web/
-├── app/
-│   ├── main.py              # 入口 + Session 认证
-│   ├── api/watermark.py     # API 路由
+├── AGENTS.md                 # 项目规范（AI 助手规则）
+├── README.md                 # 项目说明
+├── run.py                    # 本地开发启动脚本
+├── requirements.txt
+├── app/                      # 盲水印应用
+│   ├── main.py               # 入口 + Session 认证
+│   ├── api/watermark.py      # API 路由
 │   ├── services/
-│   │   ├── blind_service.py # 水印核心操作（嵌入/提取/自动检测长度）
-│   │   └── file_service.py  # 临时文件管理
+│   │   ├── blind_service.py  # 水印核心操作（封装 blind_watermark 库）
+│   │   └── file_service.py   # 临时文件管理
 │   ├── static/
 │   │   ├── css/bwm-theme.css # 主题样式（粉嫩风格）
 │   │   ├── js/bwm-theme.js   # 交互逻辑
@@ -77,13 +81,15 @@ blind_watermark_web/
 │   └── templates/
 │       ├── index.html        # 盲水印工具页面
 │       └── auth.html         # 密钥验证页面
-├── tool-site/
-│   ├── index.html            # 工具导航首页
+├── tool-site/                # 工具导航首页（独立项目）
+│   ├── index.html            # 首页 HTML
 │   ├── style.css             # 首页样式
-│   └── script.js             # 首页动画（花瓣粒子、滚动入场）
-├── requirements.txt
-└── run.py                    # 本地开发启动脚本
-```
+│   └── script.js             # 首页动画
+├── docs/                     # 文档
+│   ├── STYLE_GUIDE.md        # 设计规范/样式指南
+│   ├── ARCHITECTURE.md       # 架构说明
+│   └── DEPLOYMENT.md         # 部署文档
+└── tests/
 
 ## 开发
 
