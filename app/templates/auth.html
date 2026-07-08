@@ -5,80 +5,78 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>访问验证 - Blind Watermark Web</title>
-    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/bwm-theme.css">
     <style>
         .auth-page {
             display: flex;
             align-items: center;
             justify-content: center;
             min-height: 100vh;
-            background: var(--fi-bg);
         }
 
         .auth-card {
             width: 100%;
             max-width: 380px;
-            background: var(--fi-card-bg);
-            border: 1px solid var(--fi-border);
-            border-radius: var(--fi-radius-md);
-            box-shadow: var(--fi-shadow-soft);
-            padding: var(--fi-space-7);
+            background: var(--bwm-surface-solid, #fff);
+            border: 1px solid var(--bwm-border, #d0c0b0);
+            border-radius: var(--bwm-radius-xl, 20px);
+            box-shadow: var(--bwm-shadow, 0 4px 18px rgba(142,98,68,0.06));
+            padding: 32px;
         }
 
         .auth-card h1 {
-            font-size: var(--fi-font-size-xl);
-            font-weight: var(--fi-font-weight-semibold);
-            color: var(--fi-text-heading);
-            margin: 0 0 var(--fi-space-2);
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--bwm-brown, #4a3728);
+            margin: 0 0 8px;
         }
 
         .auth-card p {
-            font-size: var(--fi-font-size-sm);
-            color: var(--fi-text-muted);
-            margin: 0 0 var(--fi-space-6);
+            font-size: 13px;
+            color: var(--bwm-brown-light, #8a7a6a);
+            margin: 0 0 24px;
         }
 
         .auth-input {
             width: 100%;
-            height: var(--fi-control-height-md);
-            padding: 0 var(--fi-space-3);
-            border: 1px solid var(--fi-form-border);
-            border-radius: var(--fi-input-radius);
-            background: var(--fi-form-bg);
-            color: var(--fi-form-text);
-            font-family: var(--fi-font-base);
-            font-size: var(--fi-font-size-md);
+            height: 36px;
+            padding: 0 12px;
+            border: 1px solid var(--bwm-border-strong, #d0c0b0);
+            border-radius: 10px;
+            background: #fff;
+            color: var(--bwm-brown, #4a3728);
+            font-family: var(--bwm-font, 'Quicksand','Noto Sans SC',sans-serif);
+            font-size: 14px;
             outline: none;
             transition: border-color 0.16s, box-shadow 0.16s;
         }
 
         .auth-input:focus {
-            border-color: var(--fi-form-border-focus);
-            box-shadow: var(--fi-form-focus-ring);
+            border-color: #ffb5c5;
+            box-shadow: 0 0 0 3px rgba(255,181,197,0.3);
         }
 
         .auth-btn {
             width: 100%;
-            height: var(--fi-control-height-md);
-            border: 1px solid var(--fi-primary);
-            border-radius: var(--fi-radius-sm);
-            background: var(--fi-primary);
+            height: 36px;
+            border: none;
+            border-radius: 10px;
+            margin-top: 12px;
+            background: #ffb5c5;
             color: #fff;
-            font-family: var(--fi-font-base);
-            font-size: var(--fi-font-size-md);
+            font-family: var(--bwm-font, 'Quicksand','Noto Sans SC',sans-serif);
+            font-size: 14px;
             font-weight: 500;
             cursor: pointer;
-            transition: background 0.16s;
+            transition: opacity 0.16s;
         }
 
-        .auth-btn:hover {
-            background: var(--fi-primary-hover);
-        }
+        .auth-btn:hover { opacity: 0.85; }
 
         .auth-error {
-            font-size: var(--fi-font-size-sm);
-            color: var(--fi-danger);
-            margin-top: var(--fi-space-3);
+            font-size: 13px;
+            color: #b54a3a;
+            margin-top: 12px;
         }
     </style>
 </head>
