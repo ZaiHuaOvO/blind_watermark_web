@@ -3,14 +3,7 @@
    Based on: flowers-ink Fi-UI tokens
    ============================================================ */
 
-/* Fonts */
-@font-face {
-  font-family: "InterVar";
-  src: url("https://raw.githubusercontent.com/rsms/inter/master/docs/Inter-Variable.woff2") format("woff2");
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: swap;
-}
+/* Fonts - using system fonts as fallback, no external font load */
 
 /* Design Tokens */
 :root {
@@ -140,6 +133,15 @@ a:hover { color: var(--fi-primary-hover); text-decoration: underline; }
   margin-right: 4px;
 }
 .bwm-nav-home:hover { background: var(--fi-surface-soft); color: var(--fi-primary); text-decoration: none; }
+.bwm-nav-logout {
+  display: flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; border-radius: var(--fi-radius-sm);
+  color: var(--fi-text-muted); background: none; border: none; cursor: pointer;
+  font-family: var(--fi-font-base);
+  transition: all var(--fi-motion-fast) var(--fi-ease-standard);
+  margin-left: auto;
+}
+.bwm-nav-logout:hover { background: var(--fi-danger-bg); color: var(--fi-danger); }
 .bwm-nav-github {
   display: flex; align-items: center; justify-content: center;
   width: 36px; height: 36px; border-radius: var(--fi-radius-sm);

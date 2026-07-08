@@ -93,27 +93,35 @@
         <button class="auth-btn" id="authBtn">验证</button>
         <div class="auth-error" id="errorMsg"></div>
     </div>
-    <script nonce="auth-page">
-        var baseUrl = window.location.pathname.replace(/\/+$/, '');
-        if (!baseUrl) baseUrl = '';
+    <script>
         document.getElementById('keyInput').addEventListener('keydown', function (e) {
             if (e.key === 'Enter') submit();
         });
         document.getElementById('authBtn').addEventListener('click', submit);
-        function submit() {
+        async function submit() {
             var key = document.getElementById('keyInput').value.trim();
             if (!key) return;
             var btn = document.getElementById('authBtn');
             btn.disabled = true;
             btn.textContent = '验证中...';
-            fetch(baseUrl + '/?key=' + encodeURIComponent(key))
-                .then(function (r) {
-                    if (r.ok) { window.location.href = baseUrl + '/?key=' + encodeURIComponent(key); }
-                    else { document.getElementById('errorMsg').textContent = '密钥无效'; btn.disabled = false; btn.textContent = '验证'; }
-                })
-                .catch(function () {
-                    document.getElementById('errorMsg').textContent = '请求失败'; btn.disabled = false; btn.textContent = '验证';
+            try {
+                var resp = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'key=' + encodeURIComponent(key)
                 });
+                if (resp.ok) {
+                    window.location.href = '/blind-watermark';
+                } else {
+                    document.getElementById('errorMsg').textContent = '密钥无效';
+                    btn.disabled = false;
+                    btn.textContent = '验证';
+                }
+            } catch (e) {
+                document.getElementById('errorMsg').textContent = '请求失败';
+                btn.disabled = false;
+                btn.textContent = '验证';
+            }
         }
     </script>
 </body>

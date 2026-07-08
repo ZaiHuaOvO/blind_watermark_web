@@ -18,16 +18,6 @@ var imageStore = {
 //  Utilities
 // ══════════════════════════════════════════════════════
 
-function getAccessKey() {
-  var p = new URLSearchParams(window.location.search);
-  return p.get('key') || '';
-}
-
-function apiUrl(path) {
-  var key = getAccessKey();
-  return key ? path + '?key=' + encodeURIComponent(key) : path;
-}
-
 function escapeHtml(s) {
   if (!s) return '';
   var d = document.createElement('div');
@@ -94,12 +84,17 @@ function handleFileInput(inputId, storeName) {
   if (!input.files.length) return;
   var store = imageStore[storeName];
   // 单图模式：上传新图时直接覆盖旧图
+  // 使用版本号避免前一次 FileReader 异步回调覆盖新数据
   if (storeName.indexOf('Single') >= 0) {
     store.length = 0;
+    store._version = (store._version || 0) + 1;
   }
+  var currentVersion = store._version || 0;
   Array.from(input.files).forEach(function (file) {
     var reader = new FileReader();
     reader.onload = function (e) {
+      // 如果是单图模式，检查版本号是否匹配（丢弃旧回调）
+      if (storeName.indexOf('Single') >= 0 && store._version !== currentVersion) return;
       store.push({ file: file, dataUrl: e.target.result });
       renderThumbs(storeName);
     };
@@ -179,6 +174,14 @@ function isAbortError(e) {
   return e && (e.name === 'AbortError' || e.code === 20);
 }
 
+function logout() {
+  fetch('/api/logout', { method: 'POST' }).then(function () {
+    window.location.href = '/blind-watermark';
+  }).catch(function () {
+    window.location.href = '/blind-watermark';
+  });
+}
+
 // ══════════════════════════════════════════════════════
 //  Tab switching
 // ══════════════════════════════════════════════════════
@@ -220,7 +223,7 @@ async function submitEmbedSingle() {
     fd.append('password', password);
     fd.append('file', files[i]);
     try {
-      var resp = await fetch(apiUrl('/api/watermark/embed'), { method: 'POST', body: fd, signal: signal });
+      var resp = await fetch('/api/watermark/embed', { method: 'POST', body: fd, signal: signal });
       if (!resp.ok) throw new Error((await resp.json()).detail || '失败');
       var data = await resp.json();
       try {
@@ -284,7 +287,7 @@ async function submitEmbedBatch() {
     fd.append('password', password);
     fd.append('file', files[i]);
     try {
-      var resp = await fetch(apiUrl('/api/watermark/embed'), { method: 'POST', body: fd, signal: signal });
+      var resp = await fetch('/api/watermark/embed', { method: 'POST', body: fd, signal: signal });
       if (!resp.ok) throw new Error('处理失败');
       var data = await resp.json();
       try {
@@ -346,7 +349,7 @@ async function submitExtractSingle() {
     fd.append('password', password);
     fd.append('file', files[i]);
     try {
-      var resp = await fetch(apiUrl('/api/watermark/extract'), { method: 'POST', body: fd, signal: signal });
+      var resp = await fetch('/api/watermark/extract', { method: 'POST', body: fd, signal: signal });
       if (!resp.ok) throw new Error('失败');
       var data = await resp.json();
       results.push({ file_name: files[i].name, text: data.text, success: data.success });
@@ -390,7 +393,7 @@ async function submitExtractBatch() {
     fd.append('password', password);
     fd.append('file', files[i]);
     try {
-      var resp = await fetch(apiUrl('/api/watermark/extract'), { method: 'POST', body: fd, signal: signal });
+      var resp = await fetch('/api/watermark/extract', { method: 'POST', body: fd, signal: signal });
       if (!resp.ok) throw new Error('失败');
       var data = await resp.json();
       results.push({ file_name: files[i].name, text: data.text, success: data.success });
