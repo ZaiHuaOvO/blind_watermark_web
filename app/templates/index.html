@@ -74,8 +74,26 @@
             <div class="bwm-card-title">写入盲水印</div>
 
             <div class="bwm-form-group">
-              <label class="bwm-label">水印文本 <span style="color:var(--fi-danger)">*</span></label>
-              <input type="text" class="bwm-input" id="embedTextSingle" placeholder="输入要嵌入的水印文本">
+              <label class="bwm-label bwm-label--strong">选择图片</label>
+
+              <div class="bwm-upload-mode-bar">
+                <button class="bwm-upload-mode-btn bwm-upload-mode-btn--active" data-mode="file" data-area="embedSingle">📁 本地文件</button>
+                <button class="bwm-upload-mode-btn" data-mode="paste" data-area="embedSingle">📋 粘贴上传</button>
+              </div>
+
+              <div class="bwm-upload-panel bwm-upload-panel--active" id="panel-embedSingle-file">
+                <input type="file" class="bwm-input-file" id="embedFileSingle" accept="image/jpeg,image/png,image/webp">
+              </div>
+
+              <div class="bwm-upload-panel" id="panel-embedSingle-paste">
+                <div class="bwm-paste-zone" id="pasteZone-embedSingle" tabindex="0">
+                  <div class="bwm-paste-zone-icon">📋</div>
+                  <div class="bwm-paste-zone-text">在此处粘贴图片（Ctrl+V）</div>
+                </div>
+                <div class="bwm-upload-result-detail" id="pasteResult-embedSingle" style="display:none;"></div>
+              </div>
+
+              <div class="bwm-thumb-grid" id="embedPreviewSingle"></div>
             </div>
 
             <div class="bwm-form-group">
@@ -87,9 +105,8 @@
             </div>
 
             <div class="bwm-form-group">
-              <label class="bwm-label">选择图片</label>
-              <input type="file" class="bwm-input-file" id="embedFileSingle" accept="image/jpeg,image/png,image/webp">
-              <div class="bwm-thumb-grid" id="embedPreviewSingle"></div>
+              <label class="bwm-label">水印文本 <span style="color:var(--fi-danger)">*</span></label>
+              <input type="text" class="bwm-input" id="embedTextSingle" placeholder="输入要嵌入的水印文本">
             </div>
 
             <button class="bwm-btn bwm-btn--solid bwm-btn--block" id="embedBtnSingle" data-action="submitEmbedSingle">
@@ -104,8 +121,30 @@
             <div class="bwm-card-title">提取盲水印</div>
 
             <div class="bwm-form-group">
-              <label class="bwm-label">选择图片</label>
-              <input type="file" class="bwm-input-file" id="extractFileSingle" accept="image/jpeg,image/png,image/webp">
+              <label class="bwm-label bwm-label--strong">选择图片</label>
+
+              <div class="bwm-upload-mode-bar">
+                <button class="bwm-upload-mode-btn bwm-upload-mode-btn--active" data-mode="file" data-area="extractSingle">📁 本地文件</button>
+                <button class="bwm-upload-mode-btn" data-mode="paste" data-area="extractSingle">📋 粘贴上传</button>
+                <button class="bwm-upload-mode-btn" data-mode="url" data-area="extractSingle">🔗 网络图片</button>
+              </div>
+
+              <div class="bwm-upload-panel bwm-upload-panel--active" id="panel-extractSingle-file">
+                <input type="file" class="bwm-input-file" id="extractFileSingle" accept="image/jpeg,image/png,image/webp">
+              </div>
+
+              <div class="bwm-upload-panel" id="panel-extractSingle-paste">
+                <div class="bwm-paste-zone" id="pasteZone-extractSingle" tabindex="0">
+                  <div class="bwm-paste-zone-icon">📋</div>
+                  <div class="bwm-paste-zone-text">在此处粘贴图片（Ctrl+V）</div>
+                </div>
+                <div class="bwm-upload-result-detail" id="pasteResult-extractSingle" style="display:none;"></div>
+              </div>
+
+              <div class="bwm-upload-panel" id="panel-extractSingle-url">
+                <input type="text" class="bwm-url-input" id="urlInput-extractSingle" placeholder="输入图片 URL，如 https://example.com/image.jpg">
+              </div>
+
               <div class="bwm-thumb-grid" id="extractPreviewSingle"></div>
             </div>
 
@@ -136,8 +175,26 @@
             <div class="bwm-card-title">批量写入盲水印</div>
 
             <div class="bwm-form-group">
-              <label class="bwm-label">水印文本 <span style="color:var(--fi-danger)">*</span></label>
-              <input type="text" class="bwm-input" id="embedTextBatch" placeholder="输入要嵌入的水印文本">
+              <label class="bwm-label bwm-label--strong">选择多张图片</label>
+
+              <div class="bwm-upload-mode-bar">
+                <button class="bwm-upload-mode-btn bwm-upload-mode-btn--active" data-mode="file" data-area="embedBatch">📁 本地文件</button>
+                <button class="bwm-upload-mode-btn" data-mode="paste" data-area="embedBatch">📋 粘贴上传</button>
+              </div>
+
+              <div class="bwm-upload-panel bwm-upload-panel--active" id="panel-embedBatch-file">
+                <input type="file" class="bwm-input-file" id="embedFileBatch" accept="image/jpeg,image/png,image/webp" multiple>
+              </div>
+
+              <div class="bwm-upload-panel" id="panel-embedBatch-paste">
+                <div class="bwm-paste-zone" id="pasteZone-embedBatch" tabindex="0">
+                  <div class="bwm-paste-zone-icon">📋</div>
+                  <div class="bwm-paste-zone-text">在此处粘贴图片（Ctrl+V）</div>
+                </div>
+                <div class="bwm-upload-result-detail" id="pasteResult-embedBatch" style="display:none;"></div>
+              </div>
+
+              <div class="bwm-thumb-grid" id="embedPreviewBatch"></div>
             </div>
 
             <div class="bwm-form-group">
@@ -149,10 +206,8 @@
             </div>
 
             <div class="bwm-form-group">
-              <label class="bwm-label">选择多张图片</label>
-              <input type="file" class="bwm-input-file" id="embedFileBatch" accept="image/jpeg,image/png,image/webp"
-                multiple>
-              <div class="bwm-thumb-grid" id="embedPreviewBatch"></div>
+              <label class="bwm-label">水印文本 <span style="color:var(--fi-danger)">*</span></label>
+              <input type="text" class="bwm-input" id="embedTextBatch" placeholder="输入要嵌入的水印文本">
             </div>
 
             <button class="bwm-btn bwm-btn--solid bwm-btn--block" id="embedBtnBatch" data-action="submitEmbedBatch">
@@ -175,9 +230,30 @@
             </div>
 
             <div class="bwm-form-group">
-              <label class="bwm-label">选择多张图片</label>
-              <input type="file" class="bwm-input-file" id="extractFileBatch" accept="image/jpeg,image/png,image/webp"
-                multiple>
+              <label class="bwm-label bwm-label--strong">选择多张图片</label>
+
+              <div class="bwm-upload-mode-bar">
+                <button class="bwm-upload-mode-btn bwm-upload-mode-btn--active" data-mode="file" data-area="extractBatch">📁 本地文件</button>
+                <button class="bwm-upload-mode-btn" data-mode="paste" data-area="extractBatch">📋 粘贴上传</button>
+                <button class="bwm-upload-mode-btn" data-mode="url" data-area="extractBatch">🔗 网络图片</button>
+              </div>
+
+              <div class="bwm-upload-panel bwm-upload-panel--active" id="panel-extractBatch-file">
+                <input type="file" class="bwm-input-file" id="extractFileBatch" accept="image/jpeg,image/png,image/webp" multiple>
+              </div>
+
+              <div class="bwm-upload-panel" id="panel-extractBatch-paste">
+                <div class="bwm-paste-zone" id="pasteZone-extractBatch" tabindex="0">
+                  <div class="bwm-paste-zone-icon">📋</div>
+                  <div class="bwm-paste-zone-text">在此处粘贴图片（Ctrl+V）</div>
+                </div>
+                <div class="bwm-upload-result-detail" id="pasteResult-extractBatch" style="display:none;"></div>
+              </div>
+
+              <div class="bwm-upload-panel" id="panel-extractBatch-url">
+                <textarea class="bwm-url-textarea" id="urlInput-extractBatch" placeholder="每行一个图片 URL&#10;https://example.com/image1.jpg&#10;https://example.com/image2.png"></textarea>
+              </div>
+
               <div class="bwm-thumb-grid" id="extractPreviewBatch"></div>
             </div>
 

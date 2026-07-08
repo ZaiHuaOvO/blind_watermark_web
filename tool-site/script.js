@@ -70,6 +70,6 @@ document.querySelectorAll('.tool-card:not(.placeholder)').forEach(function (card
 //  5. 关于工具箱
 // ======================================================
 
-document.querySelector('.about-btn').addEventListener('click', function () {
+document.querySelector('.about-trigger').addEventListener('click', function () {
   openFeature('about');
 });
