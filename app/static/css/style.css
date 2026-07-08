@@ -110,38 +110,36 @@ a:hover { color: var(--fi-primary-hover); text-decoration: underline; }
 
 /* Navbar */
 .bwm-nav {
-  display: flex; align-items: center; justify-content: space-between;
+  display: grid;
+  grid-template-columns: 48px 1fr auto;
+  align-items: center;
   padding: var(--fi-space-3) var(--fi-space-6);
   background: var(--fi-surface);
   border-bottom: 1px solid var(--fi-border);
   box-shadow: var(--fi-shadow-soft);
   position: sticky; top: 0; z-index: 100;
 }
+.bwm-nav-home {
+  display: flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; border-radius: var(--fi-radius-sm);
+  color: var(--fi-text-muted);
+  transition: all var(--fi-motion-fast) var(--fi-ease-standard);
+  justify-self: start;
+}
+.bwm-nav-home:hover { background: var(--fi-surface-soft); color: var(--fi-primary); text-decoration: none; }
 .bwm-nav-brand {
   font-size: var(--fi-font-size-xl);
   font-weight: var(--fi-font-weight-semibold);
   color: var(--fi-text-heading);
   text-decoration: none;
   display: flex; align-items: center; gap: var(--fi-space-2);
+  justify-self: center;
 }
 .bwm-nav-brand:hover { text-decoration: none; color: var(--fi-primary); }
-.bwm-nav-home {
-  display: flex; align-items: center; justify-content: center;
-  width: 36px; height: 36px; border-radius: var(--fi-radius-sm);
-  color: var(--fi-text-muted);
-  transition: all var(--fi-motion-fast) var(--fi-ease-standard);
-  margin-right: 4px;
+.bwm-nav-actions {
+  display: flex; align-items: center; gap: var(--fi-space-1);
+  justify-self: end;
 }
-.bwm-nav-home:hover { background: var(--fi-surface-soft); color: var(--fi-primary); text-decoration: none; }
-.bwm-nav-logout {
-  display: flex; align-items: center; justify-content: center;
-  width: 36px; height: 36px; border-radius: var(--fi-radius-sm);
-  color: var(--fi-text-muted); background: none; border: none; cursor: pointer;
-  font-family: var(--fi-font-base);
-  transition: all var(--fi-motion-fast) var(--fi-ease-standard);
-  margin-left: auto;
-}
-.bwm-nav-logout:hover { background: var(--fi-danger-bg); color: var(--fi-danger); }
 .bwm-nav-github {
   display: flex; align-items: center; justify-content: center;
   width: 36px; height: 36px; border-radius: var(--fi-radius-sm);
@@ -268,6 +266,17 @@ a:hover { color: var(--fi-primary-hover); text-decoration: underline; }
 .bwm-result-item:hover { background: var(--fi-surface-soft); }
 .bwm-result-item--success { border-left: 3px solid var(--fi-success); }
 .bwm-result-item--error { border-left: 3px solid var(--fi-danger); }
+.bwm-result-item .bwm-extract-filename {
+  font-weight: 600;
+  word-break: break-all;
+  line-height: 1.5;
+  margin-bottom: 2px;
+}
+.bwm-result-item .bwm-extract-text {
+  color: var(--fi-text-muted);
+  word-break: break-all;
+  line-height: 1.4;
+}
 
 /* History Table */
 .bwm-table-wrap { overflow-x: auto; border: 1px solid var(--fi-border); border-radius: var(--fi-radius-xs); }

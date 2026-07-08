@@ -83,24 +83,26 @@ function handleFileInput(inputId, storeName) {
   var input = document.getElementById(inputId);
   if (!input.files.length) return;
   var store = imageStore[storeName];
-  // 单图模式：上传新图时直接覆盖旧图
-  // 使用版本号避免前一次 FileReader 异步回调覆盖新数据
+
+  // 先把文件快照出来，再清 input（避免 FileList 被清空导致的问题）
+  var files = Array.from(input.files);
+  input.value = '';
+
   if (storeName.indexOf('Single') >= 0) {
     store.length = 0;
-    store._version = (store._version || 0) + 1;
   }
-  var currentVersion = store._version || 0;
-  Array.from(input.files).forEach(function (file) {
+
+  files.forEach(function (file) {
     var reader = new FileReader();
     reader.onload = function (e) {
-      // 如果是单图模式，检查版本号是否匹配（丢弃旧回调）
-      if (storeName.indexOf('Single') >= 0 && store._version !== currentVersion) return;
       store.push({ file: file, dataUrl: e.target.result });
       renderThumbs(storeName);
     };
+    reader.onerror = function () {
+      console.warn('FileReader 读取失败:', file.name, file.type, file.size);
+    };
     reader.readAsDataURL(file);
   });
-  input.value = '';
 }
 
 function renderThumbs(storeName) {
@@ -367,7 +369,7 @@ async function submitExtractSingle() {
   var html = '<ul class="bwm-result-list">';
   results.forEach(function (r) {
     var icon = r.success ? '✅' : (r.text.indexOf('密码') >= 0 ? '🔑' : '❌');
-    html += '<li class="bwm-result-item ' + (r.success ? 'bwm-result-item--success' : 'bwm-result-item--error') + '">' + icon + ' <strong>' + escapeHtml(r.file_name) + '</strong> -> ' + escapeHtml(r.text) + '</li>';
+    html += '<li class="bwm-result-item ' + (r.success ? 'bwm-result-item--success' : 'bwm-result-item--error') + '">' + icon + ' <div style="min-width:0;flex:1"><div class="bwm-extract-filename">' + escapeHtml(r.file_name) + '</div><div class="bwm-extract-text">' + escapeHtml(r.text) + '</div></div></li>';
   });
   html += '</ul>';
   resultDiv.innerHTML = html;
@@ -411,7 +413,7 @@ async function submitExtractBatch() {
   var html = '<ul class="bwm-result-list">';
   results.forEach(function (r) {
     var icon = r.success ? '✅' : (r.text.indexOf('密码') >= 0 ? '🔑' : '❌');
-    html += '<li class="bwm-result-item ' + (r.success ? 'bwm-result-item--success' : 'bwm-result-item--error') + '">' + icon + ' <strong>' + escapeHtml(r.file_name) + '</strong> -> ' + escapeHtml(r.text) + '</li>';
+    html += '<li class="bwm-result-item ' + (r.success ? 'bwm-result-item--success' : 'bwm-result-item--error') + '">' + icon + ' <div style="min-width:0;flex:1"><div class="bwm-extract-filename">' + escapeHtml(r.file_name) + '</div><div class="bwm-extract-text">' + escapeHtml(r.text) + '</div></div></li>';
   });
   html += '</ul>';
   resultDiv.innerHTML = html;
