@@ -277,6 +277,41 @@ a:hover { color: var(--fi-primary-hover); text-decoration: underline; }
   word-break: break-all;
   line-height: 1.4;
 }
+.bwm-result-item .bwm-embed-filename {
+  font-weight: 600;
+  word-break: break-all;
+  line-height: 1.5;
+  margin-bottom: 2px;
+}
+.bwm-result-item .bwm-embed-outname {
+  color: var(--fi-success);
+  word-break: break-all;
+  line-height: 1.4;
+  font-size: var(--fi-font-size-sm);
+}
+.bwm-result-item .bwm-embed-error {
+  color: var(--fi-danger);
+  word-break: break-all;
+  line-height: 1.4;
+  font-size: var(--fi-font-size-sm);
+}
+
+/* Debug panel */
+.bwm-debug {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: #1a1a2e;
+  color: #e0e0e0;
+  font-family: "JetBrains Mono", "Fira Code", Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  border-radius: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  border: 1px solid #333;
+}
 
 /* History Table */
 .bwm-table-wrap { overflow-x: auto; border: 1px solid var(--fi-border); border-radius: var(--fi-radius-xs); }

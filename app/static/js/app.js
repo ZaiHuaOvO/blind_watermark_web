@@ -3,9 +3,9 @@
  * Fi-UI design, no external UI framework.
  */
 
-// ══════════════════════════════════════════════════════
+// ======================================================
 //  Globals: image arrays per upload area
-// ══════════════════════════════════════════════════════
+// ======================================================
 
 var imageStore = {
   embedSingle: [],
@@ -14,9 +14,9 @@ var imageStore = {
   extractBatch: [],
 };
 
-// ══════════════════════════════════════════════════════
+// ======================================================
 //  Utilities
-// ══════════════════════════════════════════════════════
+// ======================================================
 
 function escapeHtml(s) {
   if (!s) return '';
@@ -49,7 +49,7 @@ function setLoading(btn, loading) {
   }
 }
 
-// ── Modal (replaces browser confirm/alert) ──────────
+// -- Modal (replaces browser confirm/alert) ----------
 
 function openModal(title, body, confirmText, callback) {
   document.getElementById('modalTitle').textContent = title;
@@ -66,7 +66,7 @@ function closeModal(e) {
   document.getElementById('modalOverlay').classList.remove('bwm-modal-overlay--open');
 }
 
-// ── Lightbox (click thumbnail to enlarge) ───────────
+// -- Lightbox (click thumbnail to enlarge) -----------
 
 function openLightbox(src) {
   document.getElementById('lightboxImg').src = src;
@@ -77,19 +77,51 @@ function closeLightbox() {
   document.getElementById('lightbox').classList.remove('bwm-lightbox--open');
 }
 
-// ── Incremental file upload + square thumbnail preview
+// -- Incremental file upload + square thumbnail preview
+
+function getDebugPanel(storeName) {
+  var map = {
+    embedSingle: 'embedResultSingle',
+    extractSingle: 'extractResultSingle',
+    embedBatch: 'embedResultBatch',
+    extractBatch: 'extractResultBatch',
+  };
+  var container = document.getElementById(map[storeName]);
+  if (!container) return null;
+  var panel = container.parentNode.querySelector('.bwm-debug');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.className = 'bwm-debug';
+    panel.style.display = 'none';
+    container.parentNode.appendChild(panel);
+  }
+  return panel;
+}
+
+function debugLog(panel, msg) {
+  if (!panel) return;
+  var time = new Date().toLocaleTimeString();
+  var line = document.createElement('div');
+  line.textContent = '[' + time + '] ' + msg;
+  panel.appendChild(line);
+  panel.scrollTop = panel.scrollHeight;
+  console.log('[调试] ' + msg);
+}
 
 function handleFileInput(inputId, storeName) {
   var input = document.getElementById(inputId);
-  if (!input.files.length) return;
+  if (!input.files || !input.files.length) return;
   var store = imageStore[storeName];
-
-  // 先把文件快照出来，再清 input（避免 FileList 被清空导致的问题）
   var files = Array.from(input.files);
-  input.value = '';
+  var pending = files.length;
+  var debug = getDebugPanel(storeName);
+
+  debugLog(debug, '选择了 ' + files.length + ' 个文件');
+  debugLog(debug, '文件列表: ' + files.map(function(f) { return f.name + '(' + f.type + ',' + (f.size / 1024).toFixed(0) + 'KB)'; }).join(', '));
 
   if (storeName.indexOf('Single') >= 0) {
     store.length = 0;
+    debugLog(debug, '单图模式，清空旧图');
   }
 
   files.forEach(function (file) {
@@ -97,10 +129,26 @@ function handleFileInput(inputId, storeName) {
     reader.onload = function (e) {
       store.push({ file: file, dataUrl: e.target.result });
       renderThumbs(storeName);
+      debugLog(debug, '✅ ' + file.name + ' 读取成功 (' + (e.target.result.length / 1024).toFixed(0) + 'KB base64)');
+      pending--;
+      if (pending === 0) {
+        input.value = '';
+        debugLog(debug, '所有文件读取完毕，input 已重置');
+      }
     };
     reader.onerror = function () {
-      console.warn('FileReader 读取失败:', file.name, file.type, file.size);
+      debugLog(debug, '❌ ' + file.name + ' 读取失败: ' + (reader.error ? reader.error.message : '未知错误'));
+      pending--;
+      if (pending === 0) {
+        input.value = '';
+      }
     };
+    reader.onprogress = function (e) {
+      if (e.lengthComputable && e.total > 2 * 1024 * 1024) {
+        debugLog(debug, '⏳ ' + file.name + ' 读取中: ' + Math.round(e.loaded / e.total * 100) + '%');
+      }
+    };
+    debugLog(debug, '开始读取: ' + file.name);
     reader.readAsDataURL(file);
   });
 }
@@ -130,9 +178,9 @@ function getFilesFromStore(storeName) {
   return imageStore[storeName].map(function (item) { return item.file; });
 }
 
-// ══════════════════════════════════════════════════════
+// ======================================================
 //  Timeout & Cancel helpers
-// ══════════════════════════════════════════════════════
+// ======================================================
 
 var activeState = null;
 
@@ -184,9 +232,9 @@ function logout() {
   });
 }
 
-// ══════════════════════════════════════════════════════
+// ======================================================
 //  Tab switching
-// ══════════════════════════════════════════════════════
+// ======================================================
 
 function switchTab(tabId) {
   document.querySelectorAll('.bwm-tab').forEach(function (b) {
@@ -198,9 +246,9 @@ function switchTab(tabId) {
   if (tabId === 'history') loadHistory(1);
 }
 
-// ══════════════════════════════════════════════════════
+// ======================================================
 //  Embed (single & batch)
-// ══════════════════════════════════════════════════════
+// ======================================================
 
 async function submitEmbedSingle() {
   var text = document.getElementById('embedTextSingle').value.trim();
@@ -252,7 +300,7 @@ async function submitEmbedSingle() {
   var html = '<div class="bwm-alert ' + (fail ? 'bwm-alert--warning' : 'bwm-alert--success') + '">完成！成功 ' + ok + '/' + allResults.length + (fail ? '，失败 ' + fail : '') + '</div><ul class="bwm-result-list">';
   allResults.forEach(function (r) {
     html += '<li class="bwm-result-item ' + (r.success ? 'bwm-result-item--success' : 'bwm-result-item--error') + '">';
-    html += '<span>' + (r.success ? '✅' : '❌') + ' ' + escapeHtml(r.file_name) + (r.success ? ' -> ' + escapeHtml(r.output_name) : ': ' + escapeHtml(r.error || '')) + '</span>';
+    html += '<span>' + (r.success ? '✅' : '❌') + '</span><div style="min-width:0;flex:1"><div class="bwm-embed-filename">' + escapeHtml(r.file_name) + '</div>' + (r.success ? '<div class="bwm-embed-outname">' + escapeHtml(r.output_name) + '</div>' : '<div class="bwm-embed-error">' + escapeHtml(r.error || '') + '</div>') + '</div>';
     if (r.success) html += '<button class="bwm-btn bwm-btn--sm" onclick="downloadFromBase64(\'' + r.image_data + '\',\'' + escapeHtml(r.output_name) + '\')">⬇</button>';
     html += '</li>';
   });
@@ -316,7 +364,7 @@ async function submitEmbedBatch() {
   var html = '<div class="bwm-alert ' + (fail ? 'bwm-alert--warning' : 'bwm-alert--success') + '">完成！成功 ' + ok + '/' + allResults.length + (fail ? '，失败 ' + fail : '') + '</div><ul class="bwm-result-list">';
   allResults.forEach(function (r) {
     html += '<li class="bwm-result-item ' + (r.success ? 'bwm-result-item--success' : 'bwm-result-item--error') + '">';
-    html += '<span>' + (r.success ? '✅' : '❌') + ' ' + escapeHtml(r.file_name) + (r.success ? ' -> ' + escapeHtml(r.output_name) : ': ' + escapeHtml(r.error || '')) + '</span>';
+    html += '<span>' + (r.success ? '✅' : '❌') + '</span><div style="min-width:0;flex:1"><div class="bwm-embed-filename">' + escapeHtml(r.file_name) + '</div>' + (r.success ? '<div class="bwm-embed-outname">' + escapeHtml(r.output_name) + '</div>' : '<div class="bwm-embed-error">' + escapeHtml(r.error || '') + '</div>') + '</div>';
     if (r.success) html += '<button class="bwm-btn bwm-btn--sm" onclick="downloadFromBase64(\'' + r.image_data + '\',\'' + escapeHtml(r.output_name) + '\')">⬇</button>';
     html += '</li>';
   });
@@ -328,9 +376,9 @@ async function submitEmbedBatch() {
   setLoading(btn, false);
 }
 
-// ══════════════════════════════════════════════════════
+// ======================================================
 //  Extract (single & batch)
-// ══════════════════════════════════════════════════════
+// ======================================================
 
 async function submitExtractSingle() {
   var password = document.getElementById('extractPwdSingle').value.trim();
@@ -420,9 +468,9 @@ async function submitExtractBatch() {
   setLoading(btn, false);
 }
 
-// ══════════════════════════════════════════════════════
+// ======================================================
 //  History
-// ══════════════════════════════════════════════════════
+// ======================================================
 
 var currentHistoryPage = 1;
 
@@ -491,6 +539,35 @@ function resetAll() {
   showToast('工作队列已重置', 'info');
 }
 
+function toggleDebugAll() {
+  var btn = document.getElementById('toggleDebugBtn');
+  // 找到所有结果区域，确保每个区域都有调试面板
+  var resultIds = ['embedResultSingle', 'extractResultSingle', 'embedResultBatch', 'extractResultBatch'];
+  var panels = [];
+  resultIds.forEach(function (id) {
+    var container = document.getElementById(id);
+    if (!container) return;
+    var panel = container.parentNode.querySelector('.bwm-debug');
+    if (!panel) {
+      panel = document.createElement('div');
+      panel.className = 'bwm-debug';
+      panel.style.display = 'none';
+      container.parentNode.appendChild(panel);
+    }
+    panels.push(panel);
+  });
+
+  if (!panels.length) return;
+  var allHidden = panels.every(function (p) { return p.style.display === 'none' || !p.style.display; });
+  var show = allHidden;
+  panels.forEach(function (p) {
+    p.style.display = show ? 'block' : 'none';
+  });
+  btn.textContent = show ? '隐藏调试' : '显示调试';
+  btn.style.opacity = show ? '1' : '0.4';
+}
+
+
 document.addEventListener('DOMContentLoaded', function () {
   document.querySelectorAll('.bwm-tab').forEach(function (b) { b.addEventListener('click', function () { switchTab(this.dataset.tab); }); });
   document.querySelectorAll('[data-action]').forEach(function (b) { b.addEventListener('click', function () { var fn = window[this.dataset.action]; if (typeof fn === 'function') fn(); }); });
@@ -505,9 +582,9 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!el) return;
     el.addEventListener('change', function () {
       for (var i = 0; i < this.files.length; i++) {
-        if (this.files[i].size > 10 * 1024 * 1024) { showToast('文件超过 10MB 限制', 'error'); this.value = ''; return; }
+        if (this.files[i].size > 10 * 1024 * 1024) { showToast('\u6587\u4ef6\u8d85\u8fc7 10MB \u9650\u5236', 'error'); this.value = ''; return; }
         var ext = '.' + this.files[i].name.split('.').pop().toLowerCase();
-        if (['.jpg', '.jpeg', '.png', '.webp'].indexOf(ext) < 0) { showToast('不支持 ' + ext + ' 格式', 'error'); this.value = ''; return; }
+        if (['.jpg', '.jpeg', '.png', '.webp'].indexOf(ext) < 0) { showToast('\u4e0d\u652f\u6301 ' + ext + ' \u683c\u5f0f', 'error'); this.value = ''; return; }
       }
       handleFileInput(cfg.input, cfg.store);
     });
