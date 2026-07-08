@@ -112,6 +112,10 @@ function handleFileInput(inputId, storeName) {
   if (!input.files || !input.files.length) return;
   var store = imageStore[storeName];
   var files = Array.from(input.files);
+
+  // 立即重置 input，避免浏览器显示文件名或"未选择任何文件"
+  input.value = '';
+
   var pending = files.length;
   var debug = getDebugPanel(storeName);
 
@@ -128,14 +132,9 @@ function handleFileInput(inputId, storeName) {
       store.push({ file: file, dataUrl: e.target.result });
       renderThumbs(storeName);
       pending--;
-      if (pending === 0) {
-        input.value = '';
-        debugLog(debug, '所有文件读取完毕');
-      }
     };
     reader.onerror = function () {
       pending--;
-      if (pending === 0) { input.value = ''; }
     };
     reader.readAsDataURL(file);
   });
@@ -150,6 +149,24 @@ function renderThumbs(storeName) {
   };
   var grid = document.getElementById(map[storeName]);
   var store = imageStore[storeName];
+  if (store.length === 0) {
+    grid.innerHTML = '';
+    return;
+  }
+  // 在文件选择按钮旁显示提示文字
+  var inputId = storeName === 'embedSingle' ? 'embedFileSingle' : storeName === 'extractSingle' ? 'extractFileSingle' : storeName === 'embedBatch' ? 'embedFileBatch' : 'extractFileBatch';
+  var input = document.getElementById(inputId);
+  if (input && !input.parentNode.querySelector('.bwm-file-hint')) {
+    var hint = document.createElement('span');
+    hint.className = 'bwm-file-hint';
+    hint.textContent = '已检测到图片，预览若为空不影响使用';
+    input.parentNode.insertBefore(hint, input.nextSibling);
+  }
+  // 清空预览后移除提示
+  if (input && store.length === 0) {
+    var old = input.parentNode.querySelector('.bwm-file-hint');
+    if (old) old.remove();
+  }
   grid.innerHTML = store.map(function (item, idx) {
     return '<div class="bwm-thumb-item" onclick="openLightbox(\'' + item.dataUrl + '\')">' +
       '<img src="' + item.dataUrl + '" alt="预览">' +
@@ -244,7 +261,11 @@ async function submitEmbedSingle() {
     fd.append('file', files[i]);
     try {
       var resp = await fetch('/api/watermark/embed', { method: 'POST', body: fd, signal: signal });
-      if (!resp.ok) throw new Error((await resp.json()).detail || '失败');
+      if (!resp.ok) {
+        var errMsg = '失败';
+        try { var errData = await resp.json(); errMsg = errData.detail || errData.text || errMsg; } catch (e2) { errMsg = resp.status + ' ' + resp.statusText; }
+        throw new Error(errMsg);
+      }
       var data = await resp.json();
       try {
         var bs = atob(data.image_data.split(',')[1]), mt = data.image_data.split(',')[0].match(/:(.*?);/)[1];
@@ -263,6 +284,9 @@ async function submitEmbedSingle() {
   if (cancelled) { resultDiv.innerHTML = '<div class="bwm-alert bwm-alert--warning">处理已取消</div>'; setLoading(btn, false); return; }
   var ok = allResults.filter(function (r) { return r.success; }).length;
   var fail = allResults.filter(function (r) { return !r.success; }).length;
+  if (fail > 0) {
+    allResults.forEach(function (r) { if (!r.success) showToast(r.file_name + ': ' + r.error, 'error'); });
+  }
   var html = '<div class="bwm-alert ' + (fail ? 'bwm-alert--warning' : 'bwm-alert--success') + '">完成！成功 ' + ok + '/' + allResults.length + (fail ? '，失败 ' + fail : '') + '</div><ul class="bwm-result-list">';
   allResults.forEach(function (r) {
     html += '<li class="bwm-result-item ' + (r.success ? 'bwm-result-item--success' : 'bwm-result-item--error') + '">';
@@ -301,7 +325,11 @@ async function submitEmbedBatch() {
     fd.append('file', files[i]);
     try {
       var resp = await fetch('/api/watermark/embed', { method: 'POST', body: fd, signal: signal });
-      if (!resp.ok) throw new Error('处理失败');
+      if (!resp.ok) {
+        var errMsg = '处理失败';
+        try { var errData = await resp.json(); errMsg = errData.detail || errData.error || errMsg; } catch (e2) {}
+        throw new Error(errMsg);
+      }
       var data = await resp.json();
       try {
         var bs = atob(data.image_data.split(',')[1]), mt = data.image_data.split(',')[0].match(/:(.*?);/)[1];
@@ -320,6 +348,9 @@ async function submitEmbedBatch() {
   if (cancelled) { resultDiv.innerHTML = '<div class="bwm-alert bwm-alert--warning">处理已取消</div>'; setLoading(btn, false); return; }
   var ok = allResults.filter(function (r) { return r.success; }).length;
   var fail = allResults.filter(function (r) { return !r.success; }).length;
+  if (fail > 0) {
+    allResults.forEach(function (r) { if (!r.success) showToast(r.file_name + ': ' + r.error, 'error'); });
+  }
   var html = '<div class="bwm-alert ' + (fail ? 'bwm-alert--warning' : 'bwm-alert--success') + '">完成！成功 ' + ok + '/' + allResults.length + (fail ? '，失败 ' + fail : '') + '</div><ul class="bwm-result-list">';
   allResults.forEach(function (r) {
     html += '<li class="bwm-result-item ' + (r.success ? 'bwm-result-item--success' : 'bwm-result-item--error') + '">';
@@ -357,7 +388,11 @@ async function submitExtractSingle() {
     fd.append('file', files[i]);
     try {
       var resp = await fetch('/api/watermark/extract', { method: 'POST', body: fd, signal: signal });
-      if (!resp.ok) throw new Error('失败');
+      if (!resp.ok) {
+        var errMsg = '失败';
+        try { var errData = await resp.json(); errMsg = errData.detail || errData.text || errMsg; } catch (e) { errMsg = resp.status + ' ' + resp.statusText; }
+        throw new Error(errMsg);
+      }
       var data = await resp.json();
       results.push({ file_name: files[i].name, text: data.text, success: data.success });
     } catch (e) {
@@ -370,6 +405,7 @@ async function submitExtractSingle() {
   var html = '<ul class="bwm-result-list">';
   results.forEach(function (r) {
     var icon = r.success ? '✅' : (r.text.indexOf('密码') >= 0 ? '🔑' : '❌');
+    if (!r.success) showToast(r.file_name + ': ' + r.text, 'error');
     html += '<li class="bwm-result-item ' + (r.success ? 'bwm-result-item--success' : 'bwm-result-item--error') + '">' + icon + ' <div style="min-width:0;flex:1"><div class="bwm-extract-filename">' + escapeHtml(r.file_name) + '</div><div class="bwm-extract-text">' + escapeHtml(r.text) + '</div></div></li>';
   });
   html += '</ul>';
@@ -396,7 +432,11 @@ async function submitExtractBatch() {
     fd.append('file', files[i]);
     try {
       var resp = await fetch('/api/watermark/extract', { method: 'POST', body: fd, signal: signal });
-      if (!resp.ok) throw new Error('失败');
+      if (!resp.ok) {
+        var errMsg = '失败';
+        try { var errData = await resp.json(); errMsg = errData.detail || errData.text || errMsg; } catch (e) { errMsg = resp.status + ' ' + resp.statusText; }
+        throw new Error(errMsg);
+      }
       var data = await resp.json();
       results.push({ file_name: files[i].name, text: data.text, success: data.success });
     } catch (e) {
@@ -409,6 +449,7 @@ async function submitExtractBatch() {
   var html = '<ul class="bwm-result-list">';
   results.forEach(function (r) {
     var icon = r.success ? '✅' : (r.text.indexOf('密码') >= 0 ? '🔑' : '❌');
+    if (!r.success) showToast(r.file_name + ': ' + r.text, 'error');
     html += '<li class="bwm-result-item ' + (r.success ? 'bwm-result-item--success' : 'bwm-result-item--error') + '">' + icon + ' <div style="min-width:0;flex:1"><div class="bwm-extract-filename">' + escapeHtml(r.file_name) + '</div><div class="bwm-extract-text">' + escapeHtml(r.text) + '</div></div></li>';
   });
   html += '</ul>';

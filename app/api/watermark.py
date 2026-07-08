@@ -28,7 +28,10 @@ async def embed_watermark(
             file_service.validate_image_type(file.filename)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
-        upload_path = file_service.save_upload(file)
+        try:
+            upload_path = file_service.save_upload(file)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
         try:
             result = blind_service.embed(
@@ -49,14 +52,16 @@ async def extract_watermark(
     wm_length: int = Form(None),
 ):
     async with _get_semaphore(request):
-        upload_path = file_service.save_upload(file)
+        try:
+            upload_path = file_service.save_upload(file)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
         try:
             params = blind_service.parse_params_from_filename(file.filename)
             length = wm_length or params.get("wm_length")
 
             if length is None:
-                # Auto-detect watermark length
                 return blind_service.extract_auto(
                     input_path=upload_path,
                     password=password,
@@ -122,39 +127,39 @@ async def extract_batch(
     for file in files:
         try:
             upload_path = file_service.save_upload(file)
+        except ValueError as e:
+            results.append({
+                "file_name": file.filename,
+                "text": str(e),
+                "success": False,
+            })
+            continue
 
-            try:
-                params = blind_service.parse_params_from_filename(file.filename)
-                length = params.get("wm_length")
+        try:
+            params = blind_service.parse_params_from_filename(file.filename)
+            length = params.get("wm_length")
 
-                if not length:
-                    result = blind_service.extract_auto(
-                        input_path=upload_path,
-                        password=password,
-                    )
-                    results.append({
-                        "file_name": file.filename,
-                        **result,
-                    })
-                    continue
-
-                result = blind_service.extract(
+            if not length:
+                result = blind_service.extract_auto(
                     input_path=upload_path,
-                    wm_length=length,
                     password=password,
                 )
                 results.append({
                     "file_name": file.filename,
                     **result,
                 })
-            finally:
-                file_service.cleanup(upload_path)
+                continue
 
-        except Exception as e:
+            result = blind_service.extract(
+                input_path=upload_path,
+                wm_length=length,
+                password=password,
+            )
             results.append({
                 "file_name": file.filename,
-                "text": str(e),
-                "success": False,
+                **result,
             })
+        finally:
+            file_service.cleanup(upload_path)
 
     return {"items": results}
