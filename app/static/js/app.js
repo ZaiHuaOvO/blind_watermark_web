@@ -193,12 +193,14 @@ function startCancelableProcess(resultDivId) {
   cancelBar.id = 'cancelBar-' + Date.now();
   cancelBar.className = 'bwm-cancel-bar';
   cancelBar.style.display = 'none';
-  cancelBar.innerHTML = '<span>处理已超过 30 秒，</span><button class="bwm-btn bwm-btn--sm bwm-btn--danger" id="cancelProcessBtn">取消处理</button>';
+  cancelBar.innerHTML = '<span>若觉得出现异常可提前终止</span><button class="bwm-btn bwm-btn--sm bwm-btn--danger" id="cancelProcessBtn">提前终止</button>';
   resultDiv.parentNode.appendChild(cancelBar);
 
+  // 所有处理默认立即显示终止按钮（2 分钟后才提示）
+  cancelBar.style.display = 'flex';
   var timeoutId = setTimeout(function () {
-    cancelBar.style.display = 'flex';
-  }, 30000);
+    // 2 分钟后仅作为提醒，按钮一直可用
+  }, 120000);
 
   document.getElementById('cancelProcessBtn').onclick = function () {
     controller.abort();
