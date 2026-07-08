@@ -40,6 +40,31 @@
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
+/* ── 自定义滚动条（不占宽度，粉色，hover 显示）── */
+html {
+  overflow: overlay;
+}
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+  background: transparent;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 4px;
+}
+html:hover ::-webkit-scrollbar-thumb,
+body:hover ::-webkit-scrollbar-thumb {
+  background: rgba(255, 181, 197, 0.5);
+}
+html:hover ::-webkit-scrollbar-thumb:hover,
+body:hover ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 181, 197, 0.75);
+}
+
 html, body {
   background: linear-gradient(135deg, #fef9f0 0%, #fff5f5 50%, #f0f4ff 100%);
   color: var(--bwm-brown);
