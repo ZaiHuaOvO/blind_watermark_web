@@ -479,6 +479,28 @@ footer a {
 
 footer a:hover { text-decoration: underline; }
 
+footer .footer-icp {
+  margin-top: 10px;
+  font-size: 0.72rem;
+  color: #b0a090;
+}
+
+footer .footer-icp a {
+  color: #b0a090;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+footer .footer-icp a:hover {
+  color: #8a7a6a;
+  text-decoration: underline;
+}
+
+footer .footer-icp-sep {
+  margin: 0 6px;
+  color: #c8b8b0;
+}
+
 /* ═══════════════════════════════════════════
    10. 响应式
    ═══════════════════════════════════════════ */

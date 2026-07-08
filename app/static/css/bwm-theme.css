@@ -369,6 +369,13 @@ a:hover { color: var(--bwm-brown); }
 
 .bwm-footer { padding: 24px 20px; text-align: center; color: var(--bwm-brown-light); font-size: 13px; border-top: 1px solid var(--bwm-border); background: var(--bwm-surface); backdrop-filter: blur(12px); margin-top: 40px; }
 .bwm-footer p { margin: 4px 0; }
+.bwm-footer-copy { margin-top: 6px; font-size: 12px; }
+.bwm-footer-copy a { color: var(--bwm-brown-light); text-decoration: none; }
+.bwm-footer-copy a:hover { text-decoration: underline; }
+.bwm-footer-icp { margin-top: 8px; font-size: 12px; }
+.bwm-footer-icp a { color: var(--bwm-brown-light); text-decoration: none; transition: color 0.2s; }
+.bwm-footer-icp a:hover { color: var(--bwm-brown); text-decoration: underline; }
+.bwm-footer-icp-sep { margin: 0 6px; color: var(--bwm-border-strong); }
 
 /* ═══════════════════════════════════════════
    Grid & Form Groups

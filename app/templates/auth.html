@@ -21,7 +21,7 @@
             background: var(--bwm-surface-solid, #fff);
             border: 1px solid var(--bwm-border, #d0c0b0);
             border-radius: var(--bwm-radius-xl, 20px);
-            box-shadow: var(--bwm-shadow, 0 4px 18px rgba(142,98,68,0.06));
+            box-shadow: var(--bwm-shadow, 0 4px 18px rgba(142, 98, 68, 0.06));
             padding: 32px;
         }
 
@@ -46,7 +46,7 @@
             border-radius: 10px;
             background: #fff;
             color: var(--bwm-brown, #4a3728);
-            font-family: var(--bwm-font, 'Quicksand','Noto Sans SC',sans-serif);
+            font-family: var(--bwm-font, 'Quicksand', 'Noto Sans SC', sans-serif);
             font-size: 14px;
             outline: none;
             transition: border-color 0.16s, box-shadow 0.16s;
@@ -54,7 +54,7 @@
 
         .auth-input:focus {
             border-color: #ffb5c5;
-            box-shadow: 0 0 0 3px rgba(255,181,197,0.3);
+            box-shadow: 0 0 0 3px rgba(255, 181, 197, 0.3);
         }
 
         .auth-btn {
@@ -65,14 +65,16 @@
             margin-top: 12px;
             background: #ffb5c5;
             color: #fff;
-            font-family: var(--bwm-font, 'Quicksand','Noto Sans SC',sans-serif);
+            font-family: var(--bwm-font, 'Quicksand', 'Noto Sans SC', sans-serif);
             font-size: 14px;
             font-weight: 500;
             cursor: pointer;
             transition: opacity 0.16s;
         }
 
-        .auth-btn:hover { opacity: 0.85; }
+        .auth-btn:hover {
+            opacity: 0.85;
+        }
 
         .auth-error {
             font-size: 13px;
@@ -91,6 +93,14 @@
         </div>
         <button class="auth-btn" id="authBtn">验证</button>
         <div class="auth-error" id="errorMsg"></div>
+        <div style="text-align:center;margin-top:20px;font-size:11px;color:#b0a090;">
+            <a href="https://beian.miit.gov.cn/" target="_blank"
+                style="color:#b0a090;text-decoration:none;">蜀ICP备2024104191号</a>
+        </div>
+        <div style="text-align:center;margin-top:8px;font-size:11px;color:#b0a090;">
+            &copy; 2026 <a href="https://github.com/ZaiHuaOvO" target="_blank"
+                style="color:#b0a090;text-decoration:none;">再花</a>. All rights reserved.
+        </div>
     </div>
     <script>
         document.getElementById('keyInput').addEventListener('keydown', function (e) {
