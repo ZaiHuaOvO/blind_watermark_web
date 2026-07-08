@@ -12,6 +12,8 @@ var imageStore = {
   extractSingle: [],
   embedBatch: [],
   extractBatch: [],
+  perMulti: [],
+  perOneMulti: [],
 };
 
 // 上传模式状态: 'file' | 'paste' | 'url'
@@ -20,6 +22,8 @@ var uploadModes = {
   extractSingle: 'file',
   embedBatch: 'file',
   extractBatch: 'file',
+  perMulti: 'file',
+  perOneMulti: 'file',
 };
 
 // ══════════════════════════════════════════════════════
@@ -234,6 +238,10 @@ function handleFileInput(inputId, storeName) {
         }
       }
       checkBatchConflict(storeName);
+      // 逐张处理 - 多图分别水印：FileReader 完成后重新渲染行列表
+      if (storeName === 'perMulti') {
+        renderPerMultiList();
+      }
     };
     reader.onerror = function () {
       pending--;
@@ -248,9 +256,11 @@ function renderThumbs(storeName) {
     extractSingle: 'extractPreviewSingle',
     embedBatch: 'embedPreviewBatch',
     extractBatch: 'extractPreviewBatch',
+    perOneMulti: 'perOneMultiPreview',
   };
   var grid = document.getElementById(map[storeName]);
   var store = imageStore[storeName];
+  if (!grid) return; // 没有缩略图容器的 store（如 perMulti）跳过
 
   // 更新文件选择按钮旁的提示文字
   var inputId = storeName === 'embedSingle' ? 'embedFileSingle' : storeName === 'extractSingle' ? 'extractFileSingle' : storeName === 'embedBatch' ? 'embedFileBatch' : 'extractFileBatch';
@@ -640,6 +650,240 @@ function renderExtractUrlResults(results, resultDiv, actionLabel) {
 }
 
 // ══════════════════════════════════════════════════════
+//  逐张处理
+// ══════════════════════════════════════════════════════
+
+// 子模式状态
+var perSubMode = 'multi-image'; // 'multi-image' | 'one-multi'
+
+function switchPerSubMode(mode) {
+  perSubMode = mode;
+  document.querySelectorAll('.bwm-per-submode-btn').forEach(function (b) {
+    b.classList.toggle('bwm-per-submode-btn--active', b.dataset.permode === mode);
+  });
+  ['multi-image', 'one-multi'].forEach(function (m) {
+    var panel = document.getElementById('per-panel-' + m);
+    if (panel) panel.classList.toggle('bwm-per-panel--active', m === mode);
+  });
+}
+
+// 渲染"多图分别水印"的图片行列表
+function renderPerMultiList() {
+  var container = document.getElementById('perMultiList');
+  var store = imageStore.perMulti;
+  if (!store.length) {
+    container.innerHTML = '<div class="bwm-text-caption bwm-text-muted" style="padding:12px 0;">请先选择图片</div>';
+    return;
+  }
+  var html = '';
+  store.forEach(function (item, idx) {
+    html += '<div class="bwm-per-row" data-idx="' + idx + '">';
+    html += '<img class="bwm-per-row-thumb" src="' + item.dataUrl + '" onclick="openLightbox(\'' + item.dataUrl + '\')" alt="">';
+    html += '<div class="bwm-per-row-info">';
+    html += '<div class="bwm-per-row-filename">' + escapeHtml(item.file.name) + '</div>';
+    html += '<input type="text" class="bwm-per-row-input" placeholder="输入该图片的水印文本" data-idx="' + idx + '">';
+    html += '</div>';
+    html += '<button class="bwm-per-row-remove" onclick="removePerMultiItem(' + idx + ')" title="移除">✖</button>';
+    html += '</div>';
+  });
+  container.innerHTML = html;
+}
+
+function removePerMultiItem(idx) {
+  imageStore.perMulti.splice(idx, 1);
+  renderPerMultiList();
+  // 同时更新缩略图网格（如果有）
+  var grid = document.getElementById('embedPreview-perMulti');
+  if (grid) renderThumbs('perMulti');
+}
+
+async function submitPerMulti() {
+  var files = getFilesFromStore('perMulti');
+  var password = document.getElementById('perMultiPwd').value.trim();
+  var btn = document.getElementById('perMultiBtn');
+  if (!files.length) { showToast('请选择图片', 'error'); return; }
+
+  // 收集每个图片对应的水印文本
+  var texts = [];
+  var inputEls = document.querySelectorAll('#perMultiList .bwm-per-row-input');
+  var allValid = true;
+  inputEls.forEach(function (el) {
+    var val = el.value.trim();
+    if (!val) { allValid = false; }
+    texts.push(val);
+  });
+  if (!allValid) { showToast('每张图片的水印文本不能为空', 'error'); return; }
+
+  setLoading(btn, true);
+  cleanupActiveProcess();
+  var resultDiv = document.getElementById('perMultiResult');
+  resultDiv.innerHTML = '';
+  var controller = startCancelableProcess('perMultiResult');
+  var signal = controller.signal;
+  var allResults = []; var zipData = []; var cancelled = false;
+
+  var fd = new FormData();
+  files.forEach(function (f) { fd.append('files', f); });
+  fd.append('texts', JSON.stringify(texts));
+  fd.append('password', password);
+
+  try {
+    var resp = await fetch('/api/watermark/embed/multi-text', {
+      method: 'POST',
+      body: fd,
+      signal: signal,
+    });
+    if (!resp.ok) {
+      var errMsg = '处理失败';
+      try { var errData = await resp.json(); errMsg = errData.detail || errMsg; } catch (e2) {}
+      throw new Error(errMsg);
+    }
+    var data = await resp.json();
+    allResults = data.items;
+    data.items.forEach(function (r) {
+      if (r.success) {
+        zipData.push({ base64Data: r.image_data, filename: r.output_name });
+      }
+    });
+  } catch (e) {
+    if (!isAbortError(e)) { showToast(e.message, 'error'); }
+    cancelled = isAbortError(e);
+  }
+
+  cleanupActiveProcess();
+  if (cancelled) { resultDiv.innerHTML = '<div class="bwm-alert bwm-alert--warning">处理已取消</div>'; setLoading(btn, false); return; }
+
+  var ok = allResults.filter(function (r) { return r.success; }).length;
+  var fail = allResults.filter(function (r) { return !r.success; }).length;
+  if (fail > 0) {
+    allResults.forEach(function (r) { if (!r.success) showToast(r.file_name + ': ' + r.error, 'error'); });
+  }
+  var html = '<div class="bwm-alert ' + (fail ? 'bwm-alert--warning' : 'bwm-alert--success') + '">完成！成功 ' + ok + '/' + allResults.length + (fail ? '，失败 ' + fail : '') + '</div><ul class="bwm-result-list">';
+  allResults.forEach(function (r) {
+    html += '<li class="bwm-result-item ' + (r.success ? 'bwm-result-item--success' : 'bwm-result-item--error') + '">';
+    html += '<span>' + (r.success ? '✅' : '❌') + '</span><div style="min-width:0;flex:1"><div class="bwm-embed-filename">' + escapeHtml(r.file_name) + '</div>' + (r.success ? '<div class="bwm-embed-outname">' + escapeHtml(r.watermark_text) + ' → ' + escapeHtml(r.output_name) + '</div>' : '<div class="bwm-embed-error">' + escapeHtml(r.error || '') + '</div>') + '</div>';
+    if (r.success) html += '<button class="bwm-btn bwm-btn--sm" onclick="downloadFromBase64(\'' + r.image_data + '\',\'' + escapeHtml(r.output_name) + '\')">⬇</button>';
+    html += '</li>';
+  });
+  html += '</ul>';
+  if (zipData.length > 1) {
+    html += '<div class="bwm-mt-3"><button class="bwm-btn bwm-btn--solid" onclick=\'downloadAsZip(' + JSON.stringify(zipData) + ',"per_multi_watermarked.zip")\'>📦 批量下载 ZIP</button></div>';
+  }
+  resultDiv.innerHTML = html;
+  if (fail === 0) showToast('全部处理成功！', 'success'); else showToast(fail + ' 张失败', 'warning');
+  setLoading(btn, false);
+}
+
+// 一图多水印 - 动态 input 管理
+function renderPerOneMultiInputs() {
+  var container = document.getElementById('perOneMultiInputs');
+  var count = perOneMultiTextCount;
+  var html = '';
+  for (var i = 0; i < count; i++) {
+    html += '<div class="bwm-per-multi-row">';
+    html += '<span class="bwm-per-multi-label">水印 ' + (i + 1) + '</span>';
+    html += '<input type="text" class="bwm-per-multi-input" data-wmidx="' + i + '" placeholder="输入水印文本">';
+    html += '<button class="bwm-per-multi-del" onclick="removePerOneMultiInput(' + i + ')" title="删除此水印">✖</button>';
+    html += '</div>';
+  }
+  container.innerHTML = html;
+}
+
+var perOneMultiTextCount = 2;
+
+function addPerOneMultiInput() {
+  perOneMultiTextCount++;
+  renderPerOneMultiInputs();
+}
+
+function removePerOneMultiInput(idx) {
+  // 最少保留 1 个
+  if (perOneMultiTextCount <= 1) { showToast('至少保留一个水印', 'warning'); return; }
+  // 移除第 idx 个：重新计数
+  perOneMultiTextCount--;
+  renderPerOneMultiInputs();
+}
+
+async function submitPerOneMulti() {
+  var files = getFilesFromStore('perOneMulti');
+  var password = document.getElementById('perOneMultiPwd').value.trim();
+  var btn = document.querySelector('[data-action="submitPerOneMulti"]');
+  if (!files.length) { showToast('请选择图片', 'error'); return; }
+
+  // 收集所有水印文本
+  var texts = [];
+  var inputEls = document.querySelectorAll('#perOneMultiInputs .bwm-per-multi-input');
+  var allValid = true;
+  inputEls.forEach(function (el) {
+    var val = el.value.trim();
+    if (!val) { allValid = false; texts.push(''); }
+    else { texts.push(val); }
+  });
+  if (!allValid) { showToast('水印文本不能为空', 'error'); return; }
+
+  if (!texts.length) { showToast('请至少添加一个水印文本', 'error'); return; }
+
+  setLoading(btn, true);
+  cleanupActiveProcess();
+  var resultDiv = document.getElementById('perOneMultiResult');
+  resultDiv.innerHTML = '';
+  var controller = startCancelableProcess('perOneMultiResult');
+  var signal = controller.signal;
+  var allResults = []; var zipData = []; var cancelled = false;
+
+  var fd = new FormData();
+  fd.append('file', files[0]);
+  fd.append('texts', JSON.stringify(texts));
+  fd.append('password', password);
+
+  try {
+    var resp = await fetch('/api/watermark/embed/one-to-multi', {
+      method: 'POST',
+      body: fd,
+      signal: signal,
+    });
+    if (!resp.ok) {
+      var errMsg = '处理失败';
+      try { var errData = await resp.json(); errMsg = errData.detail || errMsg; } catch (e2) {}
+      throw new Error(errMsg);
+    }
+    var data = await resp.json();
+    allResults = data.items;
+    data.items.forEach(function (r) {
+      if (r.success) {
+        zipData.push({ base64Data: r.image_data, filename: r.output_name });
+      }
+    });
+  } catch (e) {
+    if (!isAbortError(e)) { showToast(e.message, 'error'); }
+    cancelled = isAbortError(e);
+  }
+
+  cleanupActiveProcess();
+  if (cancelled) { resultDiv.innerHTML = '<div class="bwm-alert bwm-alert--warning">处理已取消</div>'; setLoading(btn, false); return; }
+
+  var ok = allResults.filter(function (r) { return r.success; }).length;
+  var fail = allResults.filter(function (r) { return !r.success; }).length;
+  if (fail > 0) {
+    allResults.forEach(function (r) { if (!r.success) showToast(r.watermark_text + ': ' + r.error, 'error'); });
+  }
+  var html = '<div class="bwm-alert ' + (fail ? 'bwm-alert--warning' : 'bwm-alert--success') + '">完成！成功 ' + ok + '/' + allResults.length + (fail ? '，失败 ' + fail : '') + '</div><ul class="bwm-result-list">';
+  allResults.forEach(function (r) {
+    html += '<li class="bwm-result-item ' + (r.success ? 'bwm-result-item--success' : 'bwm-result-item--error') + '">';
+    html += '<span>' + (r.success ? '✅' : '❌') + '</span><div style="min-width:0;flex:1"><div class="bwm-embed-filename">' + escapeHtml(r.watermark_text) + '</div>' + (r.success ? '<div class="bwm-embed-outname">' + escapeHtml(r.output_name) + '</div>' : '<div class="bwm-embed-error">' + escapeHtml(r.error || '') + '</div>') + '</div>';
+    if (r.success) html += '<button class="bwm-btn bwm-btn--sm" onclick="downloadFromBase64(\'' + r.image_data + '\',\'' + escapeHtml(r.output_name) + '\')">⬇</button>';
+    html += '</li>';
+  });
+  html += '</ul>';
+  if (zipData.length > 1) {
+    html += '<div class="bwm-mt-3"><button class="bwm-btn bwm-btn--solid" onclick=\'downloadAsZip(' + JSON.stringify(zipData) + ',"one_multi_watermarked.zip")\'>📦 批量下载 ZIP</button></div>';
+  }
+  resultDiv.innerHTML = html;
+  if (fail === 0) showToast('全部处理成功！', 'success'); else showToast(fail + ' 个失败', 'warning');
+  setLoading(btn, false);
+}
+
+// ══════════════════════════════════════════════════════
 //  Timeout & Cancel helpers
 // ══════════════════════════════════════════════════════
 
@@ -1016,14 +1260,16 @@ async function updateStorageInfo() {
 function resetAll() {
   cleanupActiveProcess();
   for (var key in imageStore) imageStore[key] = [];
-  ['embedPreviewSingle', 'extractPreviewSingle', 'embedPreviewBatch', 'extractPreviewBatch'].forEach(function (id) {
-    document.getElementById(id).innerHTML = '';
+  ['embedPreviewSingle', 'extractPreviewSingle', 'embedPreviewBatch', 'extractPreviewBatch', 'perOneMultiPreview'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.innerHTML = '';
   });
-  ['embedResultSingle', 'extractResultSingle', 'embedResultBatch', 'extractResultBatch'].forEach(function (id) {
-    document.getElementById(id).innerHTML = '';
+  ['embedResultSingle', 'extractResultSingle', 'embedResultBatch', 'extractResultBatch', 'perMultiResult', 'perOneMultiResult'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.innerHTML = '';
   });
   // 重置粘贴结果
-  ['embedSingle', 'extractSingle', 'embedBatch', 'extractBatch'].forEach(function (area) {
+  ['embedSingle', 'extractSingle', 'embedBatch', 'extractBatch', 'perMulti', 'perOneMulti'].forEach(function (area) {
     var pasteResult = document.getElementById('pasteResult-' + area);
     if (pasteResult) { pasteResult.innerHTML = ''; pasteResult.style.display = 'none'; }
     var pasteZone = document.getElementById('pasteZone-' + area);
@@ -1032,9 +1278,14 @@ function resetAll() {
     if (urlInput) urlInput.value = '';
   });
   // 重置回文件模式
-  ['embedSingle', 'extractSingle', 'embedBatch', 'extractBatch'].forEach(function (area) {
+  ['embedSingle', 'extractSingle', 'embedBatch', 'extractBatch', 'perMulti', 'perOneMulti'].forEach(function (area) {
     switchUploadMode(area, 'file');
   });
+  // 重置逐张处理相关
+  var perMultiList = document.getElementById('perMultiList');
+  if (perMultiList) perMultiList.innerHTML = '';
+  perOneMultiTextCount = 2;
+  renderPerOneMultiInputs();
   showToast('工作队列已重置', 'info');
 }
 
@@ -1113,4 +1364,67 @@ document.addEventListener('DOMContentLoaded', function () {
       handleFileInput(cfg.input, cfg.store);
     });
   });
+
+  // 逐张处理 - 子模式切换
+  document.querySelectorAll('.bwm-per-submode-btn').forEach(function (b) {
+    b.addEventListener('click', function () { switchPerSubMode(this.dataset.permode); });
+  });
+
+  // 逐张处理 - 文件输入事件（多图分别水印）
+  var perMultiFile = document.getElementById('perMultiFile');
+  if (perMultiFile) {
+    perMultiFile.addEventListener('change', function () {
+      for (var i = 0; i < this.files.length; i++) {
+        if (this.files[i].size > 10 * 1024 * 1024) { showToast('文件超过 10MB 限制', 'error'); this.value = ''; return; }
+        var ext = '.' + this.files[i].name.split('.').pop().toLowerCase();
+        if (['.jpg', '.jpeg', '.png', '.webp'].indexOf(ext) < 0) { showToast('不支持 ' + ext + ' 格式', 'error'); this.value = ''; return; }
+      }
+      handleFileInput('perMultiFile', 'perMulti');
+      renderPerMultiList();
+    });
+  }
+
+  // 逐张处理 - 文件输入事件（一图多水印）
+  var perOneMultiFile = document.getElementById('perOneMultiFile');
+  if (perOneMultiFile) {
+    perOneMultiFile.addEventListener('change', function () {
+      if (this.files.length > 0) {
+        if (this.files[0].size > 10 * 1024 * 1024) { showToast('文件超过 10MB 限制', 'error'); this.value = ''; return; }
+        var ext = '.' + this.files[0].name.split('.').pop().toLowerCase();
+        if (['.jpg', '.jpeg', '.png', '.webp'].indexOf(ext) < 0) { showToast('不支持 ' + ext + ' 格式', 'error'); this.value = ''; return; }
+      }
+      handleFileInput('perOneMultiFile', 'perOneMulti');
+    });
+  }
+
+  // 逐张处理 - 粘贴事件
+  ['perMulti', 'perOneMulti'].forEach(function (area) {
+    var pasteZone = document.getElementById('pasteZone-' + area);
+    if (pasteZone) {
+      pasteZone.addEventListener('paste', function (e) {
+        e.preventDefault();
+        handlePaste(area)(e);
+        switchUploadMode(area, 'paste');
+        if (area === 'perMulti') renderPerMultiList();
+      });
+      pasteZone.addEventListener('dragover', function (e) {
+        e.preventDefault();
+        pasteZone.classList.add('bwm-paste-zone--dragover');
+      });
+      pasteZone.addEventListener('dragleave', function () {
+        pasteZone.classList.remove('bwm-paste-zone--dragover');
+      });
+    }
+  });
+
+  // 逐张处理 - 一图多水印初始化（默认 2 个输入框）
+  renderPerOneMultiInputs();
+
+  // 逐张处理 - 添加水印按钮
+  var addBtn = document.getElementById('perOneMultiAddBtn');
+  if (addBtn) {
+    addBtn.addEventListener('click', function () {
+      addPerOneMultiInput();
+    });
+  }
 });

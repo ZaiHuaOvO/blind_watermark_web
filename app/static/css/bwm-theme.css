@@ -626,6 +626,189 @@ a:hover { color: var(--bwm-brown); }
 }
 
 /* ═══════════════════════════════════════════
+   Per-image 逐张处理
+   ═══════════════════════════════════════════ */
+
+.bwm-per-submode-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.bwm-per-submode-btn {
+  flex: 1;
+  height: 36px;
+  border: 1px solid var(--bwm-border);
+  border-radius: var(--bwm-radius-sm);
+  background: var(--bwm-surface-solid);
+  color: var(--bwm-brown-light);
+  font-family: var(--bwm-font);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+.bwm-per-submode-btn:hover {
+  border-color: var(--bwm-pink);
+  color: var(--bwm-brown);
+}
+.bwm-per-submode-btn--active {
+  background: var(--bwm-pink);
+  border-color: transparent;
+  color: #fff;
+}
+
+.bwm-per-panel {
+  display: none;
+}
+.bwm-per-panel--active {
+  display: block;
+}
+
+/* Mode 1: 每张图片 + 水印 input 行 */
+.bwm-per-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--bwm-border);
+  border-radius: var(--bwm-radius-sm);
+  margin-bottom: 8px;
+  background: var(--bwm-surface-solid);
+}
+.bwm-per-row-thumb {
+  width: 72px;
+  height: 72px;
+  border-radius: var(--bwm-radius-sm);
+  object-fit: cover;
+  border: 1px solid var(--bwm-border);
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.bwm-per-row-info {
+  flex: 1;
+  min-width: 0;
+}
+.bwm-per-row-filename {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--bwm-brown);
+  word-break: break-all;
+  margin-bottom: 6px;
+  line-height: 1.4;
+}
+.bwm-per-row-input {
+  width: 100%;
+  height: var(--bwm-control-h);
+  padding: 0 12px;
+  border: 1px solid var(--bwm-border-strong);
+  border-radius: var(--bwm-radius-sm);
+  background: var(--bwm-surface-solid);
+  color: var(--bwm-brown);
+  font-family: var(--bwm-font);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+.bwm-per-row-input:hover { border-color: var(--bwm-pink); }
+.bwm-per-row-input:focus { border-color: var(--bwm-pink); box-shadow: 0 0 0 3px rgba(255,181,197,0.3); }
+
+.bwm-per-row-remove {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  background: var(--bwm-danger-bg);
+  color: var(--bwm-danger);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.16s ease;
+  margin-top: 22px;
+}
+.bwm-per-row-remove:hover {
+  background: var(--bwm-danger);
+  color: #fff;
+}
+
+/* Mode 2: 单图 + 动态水印列表 */
+.bwm-per-multi-inputs {
+  margin-top: 12px;
+}
+.bwm-per-multi-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.bwm-per-multi-label {
+  font-size: 13px;
+  color: var(--bwm-brown-light);
+  white-space: nowrap;
+  flex-shrink: 0;
+  width: 56px;
+}
+.bwm-per-multi-input {
+  flex: 1;
+  height: var(--bwm-control-h);
+  padding: 0 12px;
+  border: 1px solid var(--bwm-border-strong);
+  border-radius: var(--bwm-radius-sm);
+  background: var(--bwm-surface-solid);
+  color: var(--bwm-brown);
+  font-family: var(--bwm-font);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+.bwm-per-multi-input:hover { border-color: var(--bwm-pink); }
+.bwm-per-multi-input:focus { border-color: var(--bwm-pink); box-shadow: 0 0 0 3px rgba(255,181,197,0.3); }
+
+.bwm-per-multi-del {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--bwm-brown-lighter);
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.16s ease;
+}
+.bwm-per-multi-del:hover {
+  background: var(--bwm-danger-bg);
+  color: var(--bwm-danger);
+}
+
+.bwm-per-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 16px;
+  border: 1px dashed var(--bwm-border-strong);
+  border-radius: var(--bwm-radius-sm);
+  background: transparent;
+  color: var(--bwm-brown-light);
+  font-family: var(--bwm-font);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.16s ease;
+  margin-top: 4px;
+}
+.bwm-per-add-btn:hover {
+  border-color: var(--bwm-pink);
+  color: var(--bwm-pink);
+}
+
+/* ═══════════════════════════════════════════
    Responsive
    ═══════════════════════════════════════════ */
 

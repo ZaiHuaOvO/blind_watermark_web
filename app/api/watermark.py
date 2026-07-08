@@ -329,3 +329,129 @@ async def extract_batch_from_url(
             file_service.cleanup(upload_path)
 
     return {"items": results}
+
+
+@router.post("/embed/multi-text")
+async def embed_multi_text(
+    request: Request,
+    files: list[UploadFile] = File(...),
+    texts: str = Form(...),
+    password: str = Form(""),
+):
+    """多图分别水印：每张图片嵌入各自的水印文本"""
+    import json
+    try:
+        text_list = json.loads(texts)
+    except Exception:
+        raise HTTPException(status_code=400, detail="texts 格式错误，需要 JSON 数组")
+
+    if len(files) != len(text_list):
+        raise HTTPException(status_code=400, detail="图片数量与水印文本数量不一致")
+
+    results = []
+    for idx, file in enumerate(files):
+        try:
+            file_service.validate_image_type(file.filename)
+            upload_path = file_service.save_upload(file)
+
+            try:
+                wm_text = text_list[idx]
+                result = blind_service.embed(
+                    input_path=upload_path,
+                    watermark_text=wm_text,
+                    password=password,
+                    output_name_override=blind_service.build_output_name_with_text(
+                        file.filename, wm_text, 0, password
+                    ),
+                )
+                output_name = blind_service.build_output_name_with_text(
+                    file.filename, wm_text, result["wm_length"], password
+                )
+                result["output_name"] = output_name
+                results.append({
+                    "file_name": file.filename,
+                    "watermark_text": wm_text,
+                    "success": True,
+                    "output_name": result["output_name"],
+                    "image_data": result["image_data"],
+                    "has_password": result["has_password"],
+                })
+            finally:
+                file_service.cleanup(upload_path)
+
+        except Exception as e:
+            results.append({
+                "file_name": file.filename,
+                "success": False,
+                "error": str(e),
+            })
+
+    return {"items": results}
+
+
+@router.post("/embed/one-to-multi")
+async def embed_one_to_multi(
+    request: Request,
+    file: UploadFile = File(...),
+    texts: str = Form(...),
+    password: str = Form(""),
+):
+    """一图多水印：同一张图片嵌入多个不同的水印文本"""
+    import json
+    try:
+        text_list = json.loads(texts)
+    except Exception:
+        raise HTTPException(status_code=400, detail="texts 格式错误，需要 JSON 数组")
+
+    if not text_list:
+        raise HTTPException(status_code=400, detail="至少需要提供一个水印文本")
+
+    results = []
+    try:
+        file_service.validate_image_type(file.filename)
+        upload_path = file_service.save_upload(file)
+
+        for wm_text in text_list:
+            try:
+                result = blind_service.embed(
+                    input_path=upload_path,
+                    watermark_text=wm_text,
+                    password=password,
+                    output_name_override=blind_service.build_output_name_with_text(
+                        file.filename, wm_text, 0, password
+                    ),
+                )
+                output_name = blind_service.build_output_name_with_text(
+                    file.filename, wm_text, result["wm_length"], password
+                )
+                result["output_name"] = output_name
+                results.append({
+                    "file_name": file.filename,
+                    "watermark_text": wm_text,
+                    "success": True,
+                    "output_name": output_name,
+                    "image_data": result["image_data"],
+                    "has_password": result["has_password"],
+                })
+            except Exception as e:
+                results.append({
+                    "file_name": file.filename,
+                    "watermark_text": wm_text,
+                    "success": False,
+                    "error": str(e),
+                })
+
+    except Exception as e:
+        results.append({
+            "file_name": file.filename,
+            "success": False,
+            "error": str(e),
+        })
+    finally:
+        try:
+            if upload_path:
+                file_service.cleanup(upload_path)
+        except NameError:
+            pass
+
+    return {"items": results}

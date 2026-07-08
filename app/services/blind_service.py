@@ -19,6 +19,7 @@ import re
 import hashlib
 import base64
 import mimetypes
+import uuid
 from pathlib import Path
 from typing import Optional
 
@@ -55,6 +56,20 @@ def build_output_name(original_name: str, wm_length: int, password: str = "") ->
     return f"{p.stem}_blind_watermark_wm{wm_length}_pwd{pwd_prefix}{p.suffix}"
 
 
+def build_output_name_with_text(original_name: str, watermark_text: str, wm_length: int, password: str = "") -> str:
+    """生成带水印文本的输出文件名，用于"逐张处理"模式。
+
+    水印文本截取前 20 个字符，替换不安全字符为 _。
+    格式：原名_wm文本_truncated_水印文本_blind_watermark_wm{长度}_pwd{密码摘要}.扩展名
+    """
+    p = Path(original_name)
+    pwd_prefix = _password_hash_prefix(password)
+    # 清理水印文本：取前20字符，替换不安全字符
+    safe_text = watermark_text.strip()[:20]
+    safe_text = re.sub(r'[\\/:*?"<>|]', '_', safe_text)
+    return f"{p.stem}_{safe_text}_blind_watermark_wm{wm_length}_pwd{pwd_prefix}{p.suffix}"
+
+
 def parse_params_from_filename(filename: str) -> dict:
     """从文件名反向解析参数。
 
@@ -83,7 +98,7 @@ def _img_to_base64(image_path: str) -> str:
     return f"data:{mime};base64,{encoded}"
 
 
-def embed(input_path: str, watermark_text: str, password: str = "", output_dir: str = None) -> dict:
+def embed(input_path: str, watermark_text: str, password: str = "", output_dir: str = None, output_name_override: str = None) -> dict:
     """嵌入文本盲水印。
 
     Args:
@@ -91,6 +106,7 @@ def embed(input_path: str, watermark_text: str, password: str = "", output_dir: 
         watermark_text: 水印文本
         password: 嵌入密码（留空使用默认密码）
         output_dir: 输出目录（默认使用系统临时目录）
+        output_name_override: 自定义输出文件名（不指定则自动生成）
 
     Returns:
         dict: { output_name, image_data, wm_length, has_password }
@@ -111,7 +127,10 @@ def embed(input_path: str, watermark_text: str, password: str = "", output_dir: 
     bwm.embed(filename=temp_path)
 
     # 第二步：以正确文件名重新嵌入
-    output_name = build_output_name(Path(input_path).name, wm_length, password)
+    if output_name_override:
+        output_name = output_name_override
+    else:
+        output_name = build_output_name(Path(input_path).name, wm_length, password)
     output_path = str(Path(output_dir) / output_name)
 
     bwm = WaterMark(password_img=1, password_wm=password_int)

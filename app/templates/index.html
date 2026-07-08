@@ -63,6 +63,7 @@
       <div class="bwm-tab-bar">
         <button class="bwm-tab bwm-tab--active" data-tab="single">单图处理</button>
         <button class="bwm-tab" data-tab="batch">批量处理</button>
+        <button class="bwm-tab" data-tab="per">逐张处理</button>
         <button class="bwm-tab" data-tab="history">历史队列</button>
       </div>
 
@@ -263,6 +264,106 @@
             <p class="bwm-text-caption bwm-mt-1" style="margin-top:6px; line-height:1.4;">图片越大提取越慢，请耐心等待</p>
 
             <div id="extractResultBatch" class="bwm-mt-3"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════ Tab: 逐张处理 ═══════ -->
+      <div class="bwm-tab-content" id="tab-per">
+        <div class="bwm-card">
+          <div class="bwm-card-title">逐张处理</div>
+
+          <!-- 子模式切换 -->
+          <div class="bwm-per-submode-bar">
+            <button class="bwm-per-submode-btn bwm-per-submode-btn--active" data-permode="multi-image">多图分别水印</button>
+            <button class="bwm-per-submode-btn" data-permode="one-multi">一图多水印</button>
+          </div>
+
+          <!-- ═══ 子模式 1: 多图分别水印 ═══ -->
+          <div class="bwm-per-panel bwm-per-panel--active" id="per-panel-multi-image">
+
+            <div class="bwm-form-group">
+              <label class="bwm-label bwm-label--strong">选择图片</label>
+
+              <div class="bwm-upload-mode-bar">
+                <button class="bwm-upload-mode-btn bwm-upload-mode-btn--active" data-mode="file" data-area="perMulti">📁 本地文件</button>
+                <button class="bwm-upload-mode-btn" data-mode="paste" data-area="perMulti">📋 粘贴上传</button>
+              </div>
+
+              <div class="bwm-upload-panel bwm-upload-panel--active" id="panel-perMulti-file">
+                <input type="file" class="bwm-input-file" id="perMultiFile" accept="image/jpeg,image/png,image.webp" multiple>
+              </div>
+
+              <div class="bwm-upload-panel" id="panel-perMulti-paste">
+                <div class="bwm-paste-zone" id="pasteZone-perMulti" tabindex="0">
+                  <div class="bwm-paste-zone-icon">📋</div>
+                  <div class="bwm-paste-zone-text">在此处粘贴图片（Ctrl+V）</div>
+                </div>
+                <div class="bwm-upload-result-detail" id="pasteResult-perMulti" style="display:none;"></div>
+              </div>
+            </div>
+
+            <!-- 图片 + 水印 input 行列表 -->
+            <div id="perMultiList"></div>
+
+            <div class="bwm-form-group" style="margin-top:8px;">
+              <label class="bwm-label">
+                嵌入密码
+                <span class="bwm-text-caption">（可选）</span>
+              </label>
+              <input type="password" class="bwm-input" id="perMultiPwd" placeholder="">
+            </div>
+
+            <button class="bwm-btn bwm-btn--solid bwm-btn--block" id="perMultiBtn" data-action="submitPerMulti">
+              开始处理
+            </button>
+
+            <div id="perMultiResult" class="bwm-mt-3"></div>
+          </div>
+
+          <!-- ═══ 子模式 2: 一图多水印 ═══ -->
+          <div class="bwm-per-panel" id="per-panel-one-multi">
+
+            <div class="bwm-form-group">
+              <label class="bwm-label bwm-label--strong">选择图片</label>
+
+              <div class="bwm-upload-mode-bar">
+                <button class="bwm-upload-mode-btn bwm-upload-mode-btn--active" data-mode="file" data-area="perOneMulti">📁 本地文件</button>
+                <button class="bwm-upload-mode-btn" data-mode="paste" data-area="perOneMulti">📋 粘贴上传</button>
+              </div>
+
+              <div class="bwm-upload-panel bwm-upload-panel--active" id="panel-perOneMulti-file">
+                <input type="file" class="bwm-input-file" id="perOneMultiFile" accept="image/jpeg,image/png,image.webp">
+              </div>
+
+              <div class="bwm-upload-panel" id="panel-perOneMulti-paste">
+                <div class="bwm-paste-zone" id="pasteZone-perOneMulti" tabindex="0">
+                  <div class="bwm-paste-zone-icon">📋</div>
+                  <div class="bwm-paste-zone-text">在此处粘贴图片（Ctrl+V）</div>
+                </div>
+                <div class="bwm-upload-result-detail" id="pasteResult-perOneMulti" style="display:none;"></div>
+              </div>
+
+              <div class="bwm-thumb-grid" id="perOneMultiPreview"></div>
+            </div>
+
+            <!-- 水印文本列表 -->
+            <div class="bwm-per-multi-inputs" id="perOneMultiInputs"></div>
+            <button class="bwm-per-add-btn" id="perOneMultiAddBtn">＋ 添加水印</button>
+
+            <div class="bwm-form-group" style="margin-top:16px;">
+              <label class="bwm-label">
+                嵌入密码
+                <span class="bwm-text-caption">（可选）</span>
+              </label>
+              <input type="password" class="bwm-input" id="perOneMultiPwd" placeholder="">
+            </div>
+
+            <button class="bwm-btn bwm-btn--solid bwm-btn--block" data-action="submitPerOneMulti" style="margin-top:12px;">
+              开始处理
+            </button>
+
+            <div id="perOneMultiResult" class="bwm-mt-3"></div>
           </div>
         </div>
       </div>
