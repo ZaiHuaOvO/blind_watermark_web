@@ -1,6 +1,6 @@
 /**
  * 再花的工具箱 - 动画与交互
- * 花瓣粒子 + AOS 滚动动画
+ * 花瓣粒子 + AOS 滚动动画 + 功能介绍弹窗
  */
 
 // ======================================================
@@ -60,4 +60,16 @@ document.querySelectorAll('.tool-card:not(.placeholder)').forEach(function (card
       flap.classList.remove('corner-flap--lifted');
     }
   });
+});
+
+// ======================================================
+//  4. 功能介绍弹窗（已移至 feature-modal/modal.js）
+// ======================================================
+
+// ======================================================
+//  5. 关于工具箱
+// ======================================================
+
+document.querySelector('.about-btn').addEventListener('click', function () {
+  openFeature('about');
 });

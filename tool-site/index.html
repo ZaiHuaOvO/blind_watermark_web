@@ -4,11 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>再花的工具箱</title>
-  <link rel="icon" type="image/x-icon" href="https://api.flowersink.com/img/favicon.ico">
+  <link rel="icon" href="https://api.flowersink.com/img/%E7%B2%89%E6%AF%9B%E7%8C%AB%E7%8C%AB%E5%A4%B4.jpeg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="feature-modal/modal.css">
 </head>
 <body>
 
@@ -50,7 +51,7 @@
         <span class="icon">🔒</span>
         <div class="name">盲水印</div>
         <div class="desc">为图片嵌入不可见的文字水印</div>
-        <div class="bwm-tag-stack"><span class="tag tag-ready">可用</span></div>
+        <div class="bwm-tag-stack"><div class="bwm-tag-row"><span class="tag tag-ready">可用</span><span class="tag tag-key">需要密钥</span></div><span class="feature-link" onclick="event.stopPropagation(); openFeature('blind-watermark')">功能介绍</span></div>
       </div>
 
       <!-- 九宫格（等待开发） -->
@@ -58,7 +59,7 @@
         <span class="icon">🔲</span>
         <div class="name">一键生成九宫格</div>
         <div class="desc">将一张图切分成九宫格拼图</div>
-        <div class="tag tag-coming">等待开发</div>
+        <div class="bwm-tag-stack"><div class="tag tag-coming">等待开发</div><span class="feature-link" onclick="event.stopPropagation(); openFeature('nine-grid')">功能介绍</span></div>
       </div>
     </div>
 
@@ -66,10 +67,20 @@
       <p>所有工具均为原创/基于开源项目开发</p>
       <p>所有操作均尽可能在客户端完成</p>
       <p>By <a href="https://github.com/ZaiHuaOvO" target="_blank">再花</a></p>
+      <p style="margin-top:10px;font-size:0.8rem;color:#b0a090;">- 再花 -</p>
     </footer>
   </div>
 
   <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
   <script src="script.js"></script>
+  <script src="feature-modal/modal.js"></script>
+
+  <!-- ═══ 功能介绍弹窗 ═══ -->
+  <div class="modal-overlay" id="featureModal" onclick="closeFeature()">
+    <div class="modal-card" onclick="event.stopPropagation()">
+      <button class="modal-close" onclick="closeFeature()">&times;</button>
+      <div class="modal-body" id="featureContent"></div>
+    </div>
+  </div>
 </body>
 </html>

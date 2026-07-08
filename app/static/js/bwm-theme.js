@@ -149,23 +149,24 @@ function renderThumbs(storeName) {
   };
   var grid = document.getElementById(map[storeName]);
   var store = imageStore[storeName];
-  if (store.length === 0) {
-    grid.innerHTML = '';
-    return;
-  }
-  // 在文件选择按钮旁显示提示文字
+
+  // 更新文件选择按钮旁的提示文字
   var inputId = storeName === 'embedSingle' ? 'embedFileSingle' : storeName === 'extractSingle' ? 'extractFileSingle' : storeName === 'embedBatch' ? 'embedFileBatch' : 'extractFileBatch';
   var input = document.getElementById(inputId);
-  if (input && !input.parentNode.querySelector('.bwm-file-hint')) {
+  // 先移除旧提示
+  var oldHint = input && input.parentNode.querySelector('.bwm-file-hint');
+  if (oldHint) oldHint.remove();
+  // 有图片才添加提示
+  if (store.length > 0 && input) {
     var hint = document.createElement('span');
     hint.className = 'bwm-file-hint';
     hint.textContent = '已检测到图片，预览若为空不影响使用';
     input.parentNode.insertBefore(hint, input.nextSibling);
   }
-  // 清空预览后移除提示
-  if (input && store.length === 0) {
-    var old = input.parentNode.querySelector('.bwm-file-hint');
-    if (old) old.remove();
+
+  if (store.length === 0) {
+    grid.innerHTML = '';
+    return;
   }
   grid.innerHTML = store.map(function (item, idx) {
     return '<div class="bwm-thumb-item" onclick="openLightbox(\'' + item.dataUrl + '\')">' +
@@ -199,11 +200,8 @@ function startCancelableProcess(resultDivId) {
   cancelBar.style.display = 'none';
   cancelBar.innerHTML = '<span>若觉得出现异常可提前终止</span><button class="bwm-btn bwm-btn--sm bwm-btn--danger" id="cancelProcessBtn">提前终止</button>';
   resultDiv.parentNode.appendChild(cancelBar);
-  // 所有处理默认立即显示终止按钮
-  cancelBar.style.display = 'flex';
-  var timeoutId = setTimeout(function () {
-    // 2 分钟后仅作为提醒，按钮一直可用
-  }, 120000);
+  // 2 分钟后才显示终止按钮
+  var timeoutId = setTimeout(function () { cancelBar.style.display = 'flex'; }, 120000);
   document.getElementById('cancelProcessBtn').onclick = function () {
     controller.abort();
     cancelBar.innerHTML = '<span>正在取消...</span>';

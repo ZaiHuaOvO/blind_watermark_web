@@ -162,6 +162,23 @@ function renderThumbs(storeName) {
   };
   var grid = document.getElementById(map[storeName]);
   var store = imageStore[storeName];
+
+  // 更新文件选择按钮旁的提示文字
+  var inputId = storeName === 'embedSingle' ? 'embedFileSingle' : storeName === 'extractSingle' ? 'extractFileSingle' : storeName === 'embedBatch' ? 'embedFileBatch' : 'extractFileBatch';
+  var input = document.getElementById(inputId);
+  var oldHint = input && input.parentNode.querySelector('.bwm-file-hint');
+  if (oldHint) oldHint.remove();
+  if (store.length > 0 && input) {
+    var hint = document.createElement('span');
+    hint.className = 'bwm-file-hint';
+    hint.textContent = '已检测到图片，预览若为空不影响使用';
+    input.parentNode.insertBefore(hint, input.nextSibling);
+  }
+
+  if (store.length === 0) {
+    grid.innerHTML = '';
+    return;
+  }
   grid.innerHTML = store.map(function (item, idx) {
     return '<div class="bwm-thumb-item" onclick="openLightbox(\'' + item.dataUrl + '\')">' +
       '<img src="' + item.dataUrl + '" alt="预览">' +
@@ -196,10 +213,9 @@ function startCancelableProcess(resultDivId) {
   cancelBar.innerHTML = '<span>若觉得出现异常可提前终止</span><button class="bwm-btn bwm-btn--sm bwm-btn--danger" id="cancelProcessBtn">提前终止</button>';
   resultDiv.parentNode.appendChild(cancelBar);
 
-  // 所有处理默认立即显示终止按钮（2 分钟后才提示）
-  cancelBar.style.display = 'flex';
+  // 2 分钟后才显示终止按钮
   var timeoutId = setTimeout(function () {
-    // 2 分钟后仅作为提醒，按钮一直可用
+    cancelBar.style.display = 'flex';
   }, 120000);
 
   document.getElementById('cancelProcessBtn').onclick = function () {
