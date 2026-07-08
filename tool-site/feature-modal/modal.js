@@ -110,6 +110,9 @@ function openFeature(key) {
   var content = document.getElementById('featureContent');
 
   content.innerHTML = '<div class="feature-content">' + data.html + '</div>';
+  // 每次打开弹窗，确保滚动回到顶部
+  var card = overlay.querySelector('.modal-card');
+  if (card) card.scrollTop = 0;
   overlay.classList.add('modal-overlay--open');
   document.body.style.overflow = 'hidden';
 }
