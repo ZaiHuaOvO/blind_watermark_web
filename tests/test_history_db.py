@@ -8,6 +8,8 @@ class TestParseParams:
 
     def test_parse_params_from_filename(self):
         from app.services.blind_service import parse_params_from_filename
+
+        # Old format still recognized for backward compatibility
         result = parse_params_from_filename("test_blind_watermark_wm40_pwddefault.png")
         assert result["wm_length"] == 40
         assert result["pwd_hash"] == "default"
@@ -20,15 +22,27 @@ class TestParseParams:
         assert result["wm_length"] is None
         assert result["pwd_hash"] is None
 
+        # New format: no encoded params, returns None (auto-detect fallback)
+        result = parse_params_from_filename("photo_hello123_a1b2.png")
+        assert result["wm_length"] is None
+        assert result["pwd_hash"] is None
+
     def test_build_output_name(self):
         from app.services.blind_service import build_output_name
 
-        name = build_output_name("photo.jpg", 40, "")
-        assert "photo_blind_watermark_wm40_pwddefault.jpg" == name
+        name = build_output_name("photo.jpg", "hello")
+        assert name.startswith("photo_hello_")
+        assert name.endswith(".jpg")
+        uid_part = name.replace("photo_hello_", "").replace(".jpg", "")
+        assert len(uid_part) == 4  # 4位uuid
+        assert uid_part.isalnum()
 
-        name = build_output_name("my_photo.png", 135, "secret123")
-        assert "my_photo_blind_watermark_wm135_pwd" in name
+        name = build_output_name("my_photo.png", "水印文本")
+        assert name.startswith("my_photo_水印文本_")
         assert name.endswith(".png")
+        uid_part = name.replace("my_photo_水印文本_", "").replace(".png", "")
+        assert len(uid_part) == 4
+        assert uid_part.isalnum()
 
 
 class TestPasswordResolution:

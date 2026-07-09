@@ -46,28 +46,27 @@ def _password_hash_prefix(password: str) -> str:
     return hash_val[:8]
 
 
-def build_output_name(original_name: str, wm_length: int, password: str = "") -> str:
-    """生成符合命名规范的输出文件名。
+def build_output_name(original_name: str, watermark_text: str) -> str:
+    """生成符合新命名规范的输出文件名。
 
-    格式：原名_blind_watermark_wm{长度}_pwd{密码摘要}.扩展名
+    格式：原图名字_水印文本_4位uuid.扩展名
+    4位uuid从 uuid4 取前4位 hex，确保短且唯一。
+    水印文本取前20字符，替换不安全字符。
     """
     p = Path(original_name)
-    pwd_prefix = _password_hash_prefix(password)
-    return f"{p.stem}_blind_watermark_wm{wm_length}_pwd{pwd_prefix}{p.suffix}"
+    safe_text = watermark_text.strip()[:20]
+    safe_text = re.sub(r'[\\/:*?"<>|]', '_', safe_text)
+    uid = uuid.uuid4().hex[:4]
+    return f"{p.stem}_{safe_text}_{uid}{p.suffix}"
 
 
 def build_output_name_with_text(original_name: str, watermark_text: str, wm_length: int, password: str = "") -> str:
-    """生成带水印文本的输出文件名，用于"逐张处理"模式。
+    """生成带水印文本的输出文件名（兼容旧接口）。
 
-    水印文本截取前 20 个字符，替换不安全字符为 _。
-    格式：原名_wm文本_truncated_水印文本_blind_watermark_wm{长度}_pwd{密码摘要}.扩展名
+    新命名规范统一使用 build_output_name 格式。
+    此函数保留签名兼容，内部委托给 build_output_name。
     """
-    p = Path(original_name)
-    pwd_prefix = _password_hash_prefix(password)
-    # 清理水印文本：取前20字符，替换不安全字符
-    safe_text = watermark_text.strip()[:20]
-    safe_text = re.sub(r'[\\/:*?"<>|]', '_', safe_text)
-    return f"{p.stem}_{safe_text}_blind_watermark_wm{wm_length}_pwd{pwd_prefix}{p.suffix}"
+    return build_output_name(original_name, watermark_text)
 
 
 def parse_params_from_filename(filename: str) -> dict:
@@ -130,7 +129,7 @@ def embed(input_path: str, watermark_text: str, password: str = "", output_dir: 
     if output_name_override:
         output_name = output_name_override
     else:
-        output_name = build_output_name(Path(input_path).name, wm_length, password)
+        output_name = build_output_name(Path(input_path).name, watermark_text)
     output_path = str(Path(output_dir) / output_name)
 
     bwm = WaterMark(password_img=1, password_wm=password_int)

@@ -41,7 +41,7 @@
 | **服务端无状态** | 任何文件处理完毕即刻清理，服务器不保留任何用户图片和数据 |
 | **历史存于浏览器** | 所有历史记录、图片数据存于用户的 IndexedDB 中，服务器一无所知 |
 | **轻量优先** | 技术栈精简到极致，单进程 + 并发控制适配 2 核 2G 服务器 |
-| **命名规范** | 所有生成图片命名格式为 `原文件名_blind_watermark_wm{长度}_pwd{密码摘要}.{扩展名}` |
+| **命名规范** | 所有生成图片命名格式为 `原图名字_水印文本_4位uuid.{扩展名}`（水印文本截取前 20 字符，特殊字符替换为 `_`） |
 
 ### 1.3 服务器资源限制
 
@@ -362,14 +362,18 @@ def _password_hash_prefix(password: str) -> str:
     return hash_val[:8]
 
 
-def build_output_name(original_name: str, wm_length: int, password: str) -> str:
-    """生成符合命名规范的输出文件名。
+def build_output_name(original_name: str, watermark_text: str) -> str:
+    """生成符合新命名规范的输出文件名。
 
-    格式：原名_blind_watermark_wm{长度}_pwd{密码摘要}.扩展名
+    格式：原图名字_水印文本_4位uuid.扩展名
+    4位uuid从 uuid4 取前4位 hex，确保短且唯一。
+    水印文本取前20字符，替换不安全字符。
     """
     p = Path(original_name)
-    pwd_prefix = _password_hash_prefix(password)
-    return f"{p.stem}_blind_watermark_wm{wm_length}_pwd{pwd_prefix}{p.suffix}"
+    safe_text = watermark_text.strip()[:20]
+    safe_text = re.sub(r'[\\/:*?"<>|]', '_', safe_text)
+    uid = uuid.uuid4().hex[:4]
+    return f"{p.stem}_{safe_text}_{uid}{p.suffix}"
 
 
 def parse_params_from_filename(filename: str) -> dict:
@@ -1566,7 +1570,7 @@ body {
 | 阶段 | 文件 | 去向 |
 |------|------|------|
 | 上传后 | `/tmp/blind_watermark_uploads/{uuid}.jpg` | `finally` 块中删除 |
-| 嵌入后 | `/tmp/blind_watermark_uploads/xxx_blind_watermark_xxx.jpg` | 读完 base64 立即删除 |
+| 嵌入后 | `/tmp/blind_watermark_uploads/{原图名}_{水印文本}_{4位uuid}.jpg` | 读完 base64 立即删除 |
 | 任何异常 | 所有临时文件 | `try/finally` 确保清理 |
 
 **极端情况**：如果服务在处理中崩溃，临时文件会留在 `/tmp` 中。由于用的是 `/tmp`，系统重启或定期清理时会自动清除。

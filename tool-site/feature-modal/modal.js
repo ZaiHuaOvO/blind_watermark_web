@@ -40,13 +40,13 @@ var featureContent = {
   },
 
   'nine-grid': {
-    title: '一键生成九宫格',
+    title: '九宫格',
     icon: '🔲',
     html: [
       '<div class="feature-nine-header">',
       '  <span class="icon-big">🔲</span>',
       '  <h2>一键生成九宫格</h2>',
-      '  <span class="feature-nine-tag">暂定 · 等待开发</span>',
+      '  <span class="feature-nine-tag tag-ready" style="background:#e8f5e8;color:#5a8a4a;border-radius:10px;padding:2px 10px;font-size:0.7rem;font-weight:600;">可用</span>',
       '</div>',
       '<hr class="feature-divider">',
       '<h3>📖 这是什么？</h3>',
@@ -75,6 +75,7 @@ var featureContent = {
       '</ul>',
       '<hr class="feature-divider">',
       '<p style="text-align:center;font-size:0.8rem;color:#b0a090;">基于 <a href="https://github.com/fengyuanchen/cropperjs" target="_blank" style="color:#b080a0;">Cropper.js</a> 开源库开发</p>',
+      '<div style="text-align:center;margin-top:16px;"><a href="/nine-grid" class="feature-btn">前往九宫格 →</a></div>',
       '<p style="text-align:center;margin-top:18px;font-size:0.75rem;color:#c0b0a0;">- 再花 -</p>',
     ].join('\n'),
   },
