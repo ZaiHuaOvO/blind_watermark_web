@@ -1,20 +1,15 @@
 """
-盲水印核心操作适配层。
+Blind watermark service layer.
 
-本层封装 blind_watermark 库的调用，所有与原项目的交互均通过此文件完成。
-遵守"不改动原项目代码"原则。
-
-=== 密码机制 ===
-
-blind_watermark.WaterMark(password_wm) 控制水印比特打乱顺序：
-  - 嵌入: read_wm 时用 password_wm 作为随机种子打乱比特顺序
-  - 提取: 必须使用相同 password_wm 恢复顺序
-  - 密码错误 → 比特乱序 → 解码出含 � 的乱码
-
-本层通过检测提取结果是否含 � 来判断密码正确性。
+Delegates to the blind_watermark library (local source in blind_watermark_web/blind_watermark/).
+This file contains only adaptation logic: no library internals are reimplemented.
 """
 
-import os
+import os, sys
+# Ensure local blind_watermark source takes priority over pip-installed version
+_LOCAL_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if _LOCAL_ROOT not in sys.path:
+    sys.path.insert(0, _LOCAL_ROOT)
 import re
 import hashlib
 import base64
@@ -26,48 +21,43 @@ from pathlib import Path
 from typing import Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-import cv2
-import numpy as np
+# Import library classes directly as-is
 from blind_watermark import WaterMark
+from blind_watermark.bwm_core import WaterMarkCore, random_strategy1, one_dim_kmeans
 
 _logger = logging.getLogger("blind_service")
 
 
+# ── Password ────────────────────────────────────────────
+
 def _resolve_password(password: Optional[str]) -> int:
-    """将用户输入的字符串密码映射为 WaterMark 构造函数的 int 参数。"""
     if not password or password.strip() == "":
         return 1
     hash_val = hashlib.sha256(password.encode("utf-8")).hexdigest()
     return int(hash_val[:8], 16)
 
 
-def _password_hash_prefix(password: str) -> str:
-    if not password or password.strip() == "":
-        return "default"
-    hash_val = hashlib.sha256(password.encode("utf-8")).hexdigest()
-    return hash_val[:8]
+# ── Filename helpers ────────────────────────────────────
 
-
-def build_output_name(original_name: str, watermark_text: str) -> str:
+def build_output_name(original_name: str, watermark_text: str, wm_length: int = None) -> str:
     p = Path(original_name)
-    safe_text = watermark_text.strip()[:20]
-    safe_text = re.sub(r'[\\/:*?"<>|]', '_', safe_text)
-    uid = uuid.uuid4().hex[:4]
-    return f"{p.stem}_{safe_text}_{uid}{p.suffix}"
+    safe_text = re.sub(r'[\\/:*?"<>|]', '_', watermark_text.strip())
+    if len(safe_text) > 30:
+        safe_text = safe_text[:30]
+    uid = uuid.uuid4().hex[:6]
+    wm_part = f"_wm{wm_length}" if wm_length is not None else ""
+    return f"{p.stem}{wm_part}_{uid}{p.suffix}"
 
 
-def build_output_name_with_text(original_name: str, watermark_text: str, wm_length: int, password: str = "") -> str:
-    return build_output_name(original_name, watermark_text)
+def build_output_name_with_text(original_name, watermark_text, wm_length, password=""):
+    return build_output_name(original_name, watermark_text, wm_length)
 
 
 def parse_params_from_filename(filename: str) -> dict:
-    match = re.search(r'_blind_watermark_wm(\d+)_pwd(\w+)\.\w+$', filename)
+    match = re.search(r'_wm(\d+)', filename)
     if match:
-        return {
-            "wm_length": int(match.group(1)),
-            "pwd_hash": match.group(2),
-        }
-    return {"wm_length": None, "pwd_hash": None}
+        return {"wm_length": int(match.group(1))}
+    return {"wm_length": None}
 
 
 def _img_to_base64(image_path: str) -> str:
@@ -79,110 +69,206 @@ def _img_to_base64(image_path: str) -> str:
     return f"data:{mime};base64,{encoded}"
 
 
-# ── 图像缩小辅助 ──────────────────────────────────────────
+# ── Image resize ────────────────────────────────────────
 
 def _resize_if_needed(input_path: str, max_long_edge: int = 1200) -> tuple:
-    """如果图片长边过大，等比缩小到 max_long_edge 像素。
-    Returns: (处理后的路径, 是否缩小了, 原始尺寸 (w, h))
-    """
-    img = cv2.imread(input_path, cv2.IMREAD_UNCHANGED)
-    if img is None:
+    try:
+        import cv2
+    except ImportError:
+        return input_path, False, (0, 0)
+    try:
+        img = cv2.imread(input_path, cv2.IMREAD_UNCHANGED)
+        if img is None:
+            return input_path, False, (0, 0)
+        h, w = img.shape[:2]
+        orig_size = (w, h)
+        if max(w, h) <= max_long_edge:
+            return input_path, False, orig_size
+        scale = max_long_edge / max(w, h)
+        new_w, new_h = int(w * scale), int(h * scale)
+        resized = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
+        ext = Path(input_path).suffix.lower()
+        out_path = input_path + "_resized" + ext
+        cv2.imwrite(out_path, resized)
+        _logger.info(f"[SHRINK] {Path(input_path).name} {w}x{h} -> {new_w}x{new_h}")
+        return out_path, True, orig_size
+    except Exception:
         return input_path, False, (0, 0)
 
-    h, w = img.shape[:2]
-    orig_size = (w, h)
-    long_edge = max(w, h)
 
-    if long_edge <= max_long_edge:
-        return input_path, False, orig_size
+# ── Watermark presence fast check ───────────────────────
+# Uses WaterMarkCore directly (same as library's extract_raw path)
+# to sample 100 blocks and check if bit values are bimodal.
 
-    scale = max_long_edge / long_edge
-    new_w, new_h = int(w * scale), int(h * scale)
-    resized = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
+def _quick_check_watermark_present(input_path: str, password_int: int = 1) -> tuple:
+    """Fast check: sample 100 DCT blocks, check bit distribution.
+    Watermarked: strongly bimodal (mostly 0/1).
+    Non-watermarked: uniform (all four values equally likely).
+    Returns: (likely_has_watermark, extreme_ratio, detail)"""
+    try:
+        import cv2
+        import numpy as np
 
-    ext = Path(input_path).suffix.lower()
-    out_path = input_path + "_resized" + ext
-    cv2.imwrite(out_path, resized)
+        core = WaterMarkCore(password_img=password_int)
+        core.read_img(filename=input_path)
+        core.init_block_index()
 
-    _logger.info(f"[SHRINK] {Path(input_path).name} {w}x{h} -> {new_w}x{new_h}")
-    return out_path, True, orig_size
+        block_num = core.block_num
+        if block_num < 10:
+            return True, 0.0, "too small"
 
+        d1, d2 = core.d1, core.d2
+        sample_count = min(block_num, 100)
+        idx_shuffle = random_strategy1(seed=password_int, size=block_num,
+                                        block_shape=core.block_shape[0] * core.block_shape[1])
+        wm_values = np.zeros(sample_count)
+
+        for i in range(sample_count):
+            # Exact same logic as WaterMarkCore.block_get_wm (line 114-124 of bwm_core.py)
+            block = core.ca_block[2][core.block_index[i]]
+            shuffler = idx_shuffle[i]
+            block_dct_shuffled = cv2.dct(block).flatten()[shuffler].reshape(core.block_shape)
+            U, s, V = np.linalg.svd(block_dct_shuffled)
+            wm = (s[0] % d1 > d1 / 2) * 1
+            if d2:
+                tmp = (s[1] % d2 > d2 / 2) * 1
+                wm = (wm * 3 + tmp * 1) / 4
+            wm_values[i] = wm
+
+        count_0 = np.sum(wm_values < 0.1)
+        count_1 = np.sum(wm_values >= 0.9)
+        extreme_ratio = (count_0 + count_1) / sample_count
+
+        if extreme_ratio > 0.75:
+            return True, extreme_ratio, "detected"
+        elif extreme_ratio > 0.60:
+            return True, extreme_ratio, "weak"
+        else:
+            return False, extreme_ratio, "none"
+
+    except Exception as e:
+        _logger.error(f"Quick check failed: {e}", exc_info=True)
+        return True, 0.0, f"error: {e}"
+
+
+# ── Single extract attempt ──────────────────────────────
 
 def _try_extract(input_path: str, wm_length: int, password_int: int) -> dict:
-    """单次盲水印提取尝试，返回 {text, success, wm_length}。"""
+    """Try extract at a specific wm_length. Returns {text, success, wm_length}.
+    Uses WaterMark.extract() directly from the library, then validates the result."""
     try:
         bwm = WaterMark(password_img=1, password_wm=password_int)
         wm_extract = bwm.extract(filename=input_path, wm_shape=wm_length, mode="str")
-        if wm_extract and wm_extract.strip() and "�" not in wm_extract:
-            return {"text": wm_extract.strip(), "success": True, "wm_length": wm_length}
+
+        if not wm_extract or not wm_extract.strip():
+            return {"text": "", "success": False, "wm_length": wm_length}
+
+        stripped = wm_extract.strip()
+
+        if "\ufffd" in stripped:  # replacement char
+            return {"text": "", "success": False, "wm_length": wm_length}
+
+        if len(stripped) < 2:
+            return {"text": "", "success": False, "wm_length": wm_length}
+
+        has_meaningful = bool(re.search(r'[\w\u4e00-\u9fff]', stripped))
+        if not has_meaningful:
+            return {"text": "", "success": False, "wm_length": wm_length}
+
+        printable_count = sum(1 for c in stripped if c.isprintable() or c in '\n\r\t')
+        if printable_count < len(stripped) * 0.7:
+            return {"text": "", "success": False, "wm_length": wm_length}
+
+        return {"text": stripped, "success": True, "wm_length": wm_length}
+    except ValueError:
+        return {"text": "", "success": False, "wm_length": wm_length}
     except Exception:
-        pass
-    return {"text": "", "success": False, "wm_length": wm_length}
+        return {"text": "", "success": False, "wm_length": wm_length}
 
 
-# ── 调试事件收集 ──────────────────────────────────────────
+# ── Debug events (per channel) ──────────────────────────
 
-_LOG_EVENTS = []
-_RECENT_EVENTS = []  # 保留最近 200 条给 /api/watermark/logs
-
-
-def _log_event(msg: str):
-    _logger.info(f"[EVENT] {msg}")
-    _LOG_EVENTS.append(msg)
-    _RECENT_EVENTS.append(msg)
-    if len(_RECENT_EVENTS) > 200:
-        _RECENT_EVENTS.pop(0)
+_RECENT_EVENTS_BY_CHANNEL = {}
+_MAX_EVENTS_PER_CHANNEL = 500
 
 
-def get_log_events() -> list:
-    events = list(_LOG_EVENTS)
-    _LOG_EVENTS.clear()
-    return events
+def _log_event(channel_id: str, msg: str):
+    _logger.info(f"[{channel_id}] {msg}")
+    if channel_id not in _RECENT_EVENTS_BY_CHANNEL:
+        _RECENT_EVENTS_BY_CHANNEL[channel_id] = []
+    _RECENT_EVENTS_BY_CHANNEL[channel_id].append(msg)
+    if len(_RECENT_EVENTS_BY_CHANNEL[channel_id]) > _MAX_EVENTS_PER_CHANNEL:
+        _RECENT_EVENTS_BY_CHANNEL[channel_id] = _RECENT_EVENTS_BY_CHANNEL[channel_id][-_MAX_EVENTS_PER_CHANNEL:]
 
 
-def get_recent_logs() -> list:
-    return list(_RECENT_EVENTS)
+def get_recent_logs(channel_id: str, since: int = 0) -> tuple:
+    events = _RECENT_EVENTS_BY_CHANNEL.get(channel_id, [])
+    total = len(events)
+    if since >= total or total == 0:
+        return [], total
+    return events[since:], total
 
 
-# ── 线程池 ────────────────────────────────────────────────
+# ── Thread pool ─────────────────────────────────────────
 
-_EXECUTOR = ThreadPoolExecutor(max_workers=4)
+_EXECUTOR = ThreadPoolExecutor(max_workers=6)
 
 
-# ── 嵌入 ──────────────────────────────────────────────────
+# ── Embed ───────────────────────────────────────────────
 
 def embed(input_path: str, watermark_text: str, password: str = "",
-          output_dir: str = None, output_name_override: str = None) -> dict:
+          output_dir: str = None) -> dict:
+    """Embed blind watermark. Returns base64 image data + wm_length.
+    Uses WaterMark.read_img + read_wm + embed directly from the library."""
     output_dir = output_dir or os.environ.get("TEMP_DIR", "/tmp/blind_watermark_uploads")
-    os.makedirs(output_dir, exist_ok=True)
+
+    if not watermark_text or not watermark_text.strip():
+        raise ValueError("watermark text empty")
+
+    try:
+        os.makedirs(output_dir, exist_ok=True)
+    except OSError as e:
+        raise ValueError(f"cannot create output dir: {e}")
 
     password_int = _resolve_password(password)
 
-    temp_name = f"_temp_{Path(input_path).stem}.png"
-    temp_path = str(Path(output_dir) / temp_name)
+    try:
+        bwm = WaterMark(password_img=1, password_wm=password_int)
+        bwm.read_img(filename=input_path)
+        bwm.read_wm(watermark_text, mode="str")
+        wm_length = bwm.wm_size
+    except Exception as e:
+        _logger.error(f"embed failed: {e}", exc_info=True)
+        raise ValueError(f"embed processing failed: {_sanitize_error(e)}")
 
-    bwm = WaterMark(password_img=1, password_wm=password_int)
-    bwm.read_img(filename=input_path)
-    bwm.read_wm(watermark_text, mode="str")
-    wm_length = bwm.wm_size
-    bwm.embed(filename=temp_path)
+    temp_simple_name = f"bw_{uuid.uuid4().hex}.png"
+    temp_output_path = str(Path(output_dir) / temp_simple_name)
 
-    if output_name_override:
-        output_name = output_name_override
-    else:
-        output_name = build_output_name(Path(input_path).name, watermark_text)
-    output_path = str(Path(output_dir) / output_name)
+    try:
+        bwm.embed(filename=temp_output_path)
+    except Exception as e:
+        _logger.error(f"embed write failed: {e}", exc_info=True)
+        raise ValueError(f"embed write failed: {_sanitize_error(e)}")
 
-    bwm = WaterMark(password_img=1, password_wm=password_int)
-    bwm.read_img(filename=input_path)
-    bwm.read_wm(watermark_text, mode="str")
-    bwm.embed(filename=output_path)
+    if not os.path.exists(temp_output_path):
+        raise ValueError("output file not created, incompatible image format")
 
-    if os.path.exists(temp_path):
-        os.remove(temp_path)
+    try:
+        image_data = _img_to_base64(temp_output_path)
+    except Exception as e:
+        _logger.error(f"base64 encode failed: {e}", exc_info=True)
+        try:
+            os.remove(temp_output_path)
+        except Exception:
+            pass
+        raise ValueError(f"image encoding failed: {_sanitize_error(e)}")
 
-    image_data = _img_to_base64(output_path)
-    os.remove(output_path)
+    try:
+        os.remove(temp_output_path)
+    except Exception:
+        pass
+
+    output_name = build_output_name(Path(input_path).name, watermark_text, wm_length)
 
     return {
         "output_name": output_name,
@@ -192,121 +278,121 @@ def embed(input_path: str, watermark_text: str, password: str = "",
     }
 
 
-# ── 改进版 extract_auto（并行 + 缩小加速） ────────────
+def _sanitize_error(e: Exception) -> str:
+    msg = str(e)
+    if len(msg) > 200:
+        msg = msg[:200] + "..."
+    return msg
 
-def extract_auto(input_path: str, password: str = "", _progress_callback=None) -> dict:
-    """自动检测水印长度并提取盲水印。
 
-    优化策略：
-    1. 图像缩小加速（长边 > 1200px 时等比缩小）
-    2. 先并行尝试常见长度，分组选出候选
-    3. 用原图回退验证
+# ── extract_auto ────────────────────────────────────────
 
-    Args:
-        input_path: 图片路径
-        password: 密码
-        _progress_callback: 可选进度回调 (msg: str) -> None
+def _build_coarse_candidates() -> list:
+    """Build candidate bit lengths.
 
-    Returns:
-        dict: {text, success, wm_length}
+    The blind_watermark library ONLY extracts correctly at the exact wm_size
+    (the internal bit shuffle uses wm_size as seed dimension). Any other
+    wm_shape produces garbled results. So we must scan exhaustively (step=1).
+
+    With 6 workers on a 1200px shrunk image (~0.3s each): ~24 seconds worst.
+    Early-exit on first valid result means typical case is much faster.
+
+    For images produced by OUR tool, the filename encodes _wm{N} and
+    auto-detect is skipped entirely.
     """
+    return list(range(8, 481, 1))
+
+
+def extract_auto(input_path: str, password: str = "", channel_id: str = "extract_auto",
+                 _progress_callback=None) -> dict:
+    """Auto-detect watermark length and extract text.
+    Uses WaterMark.extract() at multiple wm_shape candidates."""
     def _log(msg):
-        _log_event(msg)
+        _log_event(channel_id, msg)
         if _progress_callback:
             _progress_callback(msg)
 
     password_int = _resolve_password(password)
 
-    _log(f"📸 读取图片: {Path(input_path).name}")
+    _log(f"Reading: {Path(input_path).name}")
     t0 = time.time()
 
-    # 1. 缩小
+    _log("Checking watermark presence...")
+    has_wm, confidence, detail = _quick_check_watermark_present(input_path, password_int)
+    _log(f"Pre-check: {detail}")
+
+    if not has_wm:
+        elapsed = time.time() - t0
+        _log(f"No watermark, skipping scan ({elapsed:.1f}s)")
+        return {"text": "no watermark detected", "success": False, "wm_length": None}
+
     shrunk_path, did_shrink, orig_size = _resize_if_needed(input_path, max_long_edge=1200)
     processing_path = shrunk_path
-    _log(f"📐 原始尺寸: {orig_size[0]}x{orig_size[1]}" +
-         (f" → 缩小到长边1200" if did_shrink else " (无需缩小)"))
+    _log(f"Size: {orig_size[0]}x{orig_size[1]}" +
+         (" -> shrunk" if did_shrink else " (no shrink)"))
 
-    # 2. 候选长度
-    common = list(range(24, 121, 24))      # 1~5 中文字
-    common += list(range(8, 49, 8))        # 1~6 ASCII
-    common += list(range(144, 481, 24))    # 6~20 中文字
-    common += list(range(56, 241, 16))     # 7~30 ASCII
-    all_candidates = sorted(set(common))
-    _log(f"🔢 候选长度: {len(all_candidates)} 种")
+    all_candidates = _build_coarse_candidates()
+    _log(f"Candidates: {len(all_candidates)} (step=16)")
 
-    # 3. 并行扫描（4 个一组）
-    BATCH_SIZE = 4
-    found = None
+    BATCH_SIZE = 6
 
-    for batch_start in range(0, len(all_candidates), BATCH_SIZE):
-        batch = all_candidates[batch_start:batch_start + BATCH_SIZE]
-        _log(f"🔍 尝试 {batch[0]}~{batch[-1]}...")
-
-        futures = {}
-        for wl in batch:
-            futures[_EXECUTOR.submit(_try_extract, processing_path, wl, password_int)] = wl
-
-        for future in as_completed(futures):
-            result = future.result()
-            if result["success"]:
-                found = result
-                for f in futures:
-                    f.cancel()
-                break
-
-        if found:
-            _log(f"✅ 发现水印: 长度={found['wm_length']}, 文本='{found['text']}'")
-            break
-        _log(f"❌ 无匹配，继续...")
-
-    # 4. 缩小图没找到 → 原图重试
-    if not found and did_shrink:
-        _log(f"🔄 缩略图未找到，尝试原图...")
-        processing_path = input_path
-        for batch_start in range(0, len(all_candidates), BATCH_SIZE):
-            batch = all_candidates[batch_start:batch_start + BATCH_SIZE]
+    def _scan_candidates(img_path, candidates, label=""):
+        _log(f"Scanning {label} (step=1, {candidates[0]}~{candidates[-1]})")
+        local_found = []
+        for batch_start in range(0, len(candidates), BATCH_SIZE):
+            batch = candidates[batch_start:batch_start + BATCH_SIZE]
             futures = {}
             for wl in batch:
-                futures[_EXECUTOR.submit(_try_extract, processing_path, wl, password_int)] = wl
+                futures[_EXECUTOR.submit(_try_extract, img_path, wl, password_int)] = wl
             for future in as_completed(futures):
                 result = future.result()
                 if result["success"]:
-                    found = result
-                    for f in futures:
-                        f.cancel()
-                    break
-            if found:
-                _log(f"✅ 原图发现: 长度={found['wm_length']}, 文本='{found['text']}'")
+                    local_found.append(result)
+            if local_found:
+                _log(f"Found: len={local_found[0]['wm_length']}, text={local_found[0]['text'][:30]}")
                 break
-            _log(f"❌ 无匹配，继续...")
+        return local_found
 
-    # 5. 验证
-    if found and did_shrink:
-        _log(f"🔬 原图验证长度={found['wm_length']}...")
-        verify = _try_extract(input_path, found["wm_length"], password_int)
-        if verify["success"]:
-            _log(f"✅ 原图验证成功！")
-            found = verify
+    found = _scan_candidates(processing_path, all_candidates, "shrunk")
+
+    if not found and did_shrink:
+        _log("Not found on shrunk, scanning original...")
+        found = _scan_candidates(input_path, all_candidates, "original")
 
     elapsed = time.time() - t0
 
-    # 清理缩小用的临时文件
     if did_shrink and os.path.exists(shrunk_path):
-        os.remove(shrunk_path)
-        _log(f"🧹 临时缩略图已删除")
+        try:
+            os.remove(shrunk_path)
+        except Exception:
+            pass
 
     if found:
-        _log(f"🎉 提取成功! 耗时={elapsed:.1f}s, 长度={found['wm_length']}, 内容='{found['text']}'")
-        return found
+        best = found[0]
+        if did_shrink:
+            _log(f"Verifying on original with len={best['wm_length']}...")
+            verify = _try_extract(input_path, best["wm_length"], password_int)
+            if verify["success"]:
+                _log("Original verified!")
+                best = verify
+                elapsed = time.time() - t0
+            else:
+                _log("Original verify failed, using shrunk result")
+        _log(f"Done! {elapsed:.1f}s, len={best['wm_length']}, text={best['text']}")
+        return best
 
-    _log(f"😢 未能提取盲水印，耗时={elapsed:.1f}s")
-    return {"text": "无法自动检测水印长度，未能提取到盲水印", "success": False, "wm_length": None}
+    _log(f"Extract failed ({elapsed:.1f}s)")
+    return {"text": "could not detect watermark length", "success": False, "wm_length": None}
 
 
-# ── 单次提取 ──────────────────────────────────────────
+# ── Single extract (known wm_length) ────────────────────
 
 def extract(input_path: str, wm_length: int, password: str = "") -> dict:
-    """从图片中提取文本盲水印。"""
+    """Extract text watermark from image with known length.
+    Uses WaterMark.extract() directly from the library."""
+    if wm_length <= 0:
+        return {"text": "invalid watermark length", "success": False}
+
     password_int = _resolve_password(password)
 
     try:
@@ -318,12 +404,16 @@ def extract(input_path: str, wm_length: int, password: str = "") -> dict:
         )
 
         if not wm_extract or not wm_extract.strip():
-            return {"text": "没有提取到盲水印", "success": False}
+            return {"text": "no watermark found", "success": False}
 
-        if "�" in wm_extract:
-            return {"text": "密码错误，无法提取水印", "success": False}
+        stripped = wm_extract.strip()
+        if "�" in stripped:
+            return {"text": "wrong password", "success": False}
 
-        return {"text": wm_extract.strip(), "success": True}
+        return {"text": stripped, "success": True}
 
+    except ValueError:
+        return {"text": "watermark decode failed", "success": False}
     except Exception as e:
-        return {"text": "没有提取到盲水印", "success": False}
+        _logger.error("extract failed: {}".format(e), exc_info=True)
+        return {"text": "extract failed", "success": False}

@@ -1,8 +1,5 @@
 """
 Watermark API routes.
-
-All interfaces implement "delete-after-use" temporary file strategy.
-Embed endpoints return base64 image data, no files retained on server.
 """
 
 import asyncio
@@ -10,7 +7,7 @@ import logging
 import time
 from typing import Optional
 
-from fastapi import APIRouter, UploadFile, File, Form, Request, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, Request, HTTPException, Query
 from pydantic import BaseModel
 
 from app.services import blind_service, file_service
@@ -22,7 +19,6 @@ if not _logger.handlers:
     _handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
     _logger.addHandler(_handler)
 
-
 router = APIRouter()
 
 
@@ -31,23 +27,19 @@ class UrlEmbedRequest(BaseModel):
     text: str
     password: str = ""
 
-
 class UrlExtractRequest(BaseModel):
     url: str
     password: str = ""
     wm_length: Optional[int] = None
-
 
 class BatchUrlEmbedRequest(BaseModel):
     urls: list[str]
     text: str
     password: str = ""
 
-
 class BatchUrlExtractRequest(BaseModel):
     urls: list[str]
     password: str = ""
-
 
 def _get_semaphore(request: Request):
     return request.app.state.process_semaphore
@@ -60,35 +52,31 @@ async def embed_watermark(
     text: str = Form(...),
     password: str = Form(""),
 ):
-    _t0 = _time.time()
-    _logger.info(f"[TIMING] /embed 收到请求 file={file.filename}")
-
+    t0 = time.time()
+    _logger.info(f"[TIMING] /embed file={file.filename}")
     async with _get_semaphore(request):
-        _t1 = _time.time()
-        _logger.info(f"[TIMING] /embed 获取信号量耗时: {_t1-_t0:.3f}s")
         try:
             file_service.validate_image_type(file.filename)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
         try:
-            upload_path = await asyncio.to_thread(file_service.save_upload, file)
+            upload_path = file_service.save_upload(file)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
-        _t2 = _time.time()
-        _logger.info(f"[TIMING] /embed save_upload 耗时: {_t2-_t1:.3f}s")
-
         try:
-            _logger.info(f"[TIMING] /embed 开始 embed text='{text[:20]}'")
             result = await asyncio.to_thread(
                 blind_service.embed,
                 input_path=upload_path,
                 watermark_text=text,
                 password=password,
             )
-            _t3 = _time.time()
-            _logger.info(f"[TIMING] /embed 嵌入耗时: {_t3-_t2:.3f}s")
-            _logger.info(f"[TIMING] /embed 总耗时: {_t3-_t0:.3f}s")
+            _logger.info(f"[TIMING] /embed done {time.time()-t0:.2f}s")
             return result
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except Exception as e:
+            _logger.error(f"/embed unexpected: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"server error: {str(e)[:200]}")
         finally:
             file_service.cleanup(upload_path)
 
@@ -99,49 +87,33 @@ async def extract_watermark(
     file: UploadFile = File(...),
     password: str = Form(""),
     wm_length: int = Form(None),
+    channel_id: str = Query("extract", description="log channel"),
 ):
-    _t0 = _time.time()
-    _logger.info(f"[TIMING] /extract 收到请求 file={file.filename}")
-
+    t0 = time.time()
+    _logger.info(f"[TIMING] /extract file={file.filename} channel={channel_id}")
     async with _get_semaphore(request):
-        _t1 = _time.time()
-        _logger.info(f"[TIMING] /extract 获取信号量耗时: {_t1-_t0:.3f}s")
-
         try:
-            # save_upload 中有同步 read，放到线程池
             upload_path = await asyncio.to_thread(file_service.save_upload, file)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
-        _t2 = _time.time()
-        _logger.info(f"[TIMING] /extract save_upload 耗时: {_t2-_t1:.3f}s")
-
         try:
             params = blind_service.parse_params_from_filename(file.filename)
             length = wm_length or params.get("wm_length")
-            _t3 = _time.time()
-
             if length is None:
-                _logger.info(f"[TIMING] /extract 开始 extract_auto (自动检测长度)")
-                # extract_auto 是同步CPU密集型，放到线程池避免阻塞事件循环
                 result = await asyncio.to_thread(
                     blind_service.extract_auto,
                     input_path=upload_path,
                     password=password,
+                    channel_id=channel_id,
                 )
             else:
-                _logger.info(f"[TIMING] /extract 开始 extract wm_length={length}")
-                # extract 也是同步CPU密集型
                 result = await asyncio.to_thread(
                     blind_service.extract,
                     input_path=upload_path,
                     wm_length=length,
                     password=password,
                 )
-
-            _t4 = _time.time()
-            _logger.info(f"[TIMING] /extract 盲水印提取耗时: {_t4-_t3:.3f}s")
-            _logger.info(f"[TIMING] /extract 总耗时: {_t4-_t0:.3f}s result_success={result.get('success')}")
-
+            _logger.info(f"[TIMING] /extract done {time.time()-t0:.2f}s success={result.get('success')}")
             return result
         finally:
             file_service.cleanup(upload_path)
@@ -155,35 +127,23 @@ async def embed_batch(
     password: str = Form(""),
 ):
     results = []
-
     for file in files:
         try:
             file_service.validate_image_type(file.filename)
             upload_path = file_service.save_upload(file)
-
             try:
-                result = blind_service.embed(
-                    input_path=upload_path,
-                    watermark_text=text,
-                    password=password,
-                )
+                result = blind_service.embed(input_path=upload_path, watermark_text=text, password=password)
                 results.append({
-                    "file_name": file.filename,
-                    "success": True,
-                    "output_name": result["output_name"],
-                    "image_data": result["image_data"],
+                    "file_name": file.filename, "success": True,
+                    "output_name": result["output_name"], "image_data": result["image_data"],
                     "has_password": result["has_password"],
                 })
             finally:
                 file_service.cleanup(upload_path)
-
+        except ValueError as e:
+            results.append({"file_name": file.filename, "success": False, "error": str(e)})
         except Exception as e:
-            results.append({
-                "file_name": file.filename,
-                "success": False,
-                "error": str(e),
-            })
-
+            results.append({"file_name": file.filename, "success": False, "error": f"server error: {str(e)[:200]}"})
     return {"items": results}
 
 
@@ -192,69 +152,43 @@ async def extract_batch(
     request: Request,
     files: list[UploadFile] = File(...),
     password: str = Form(""),
+    channel_id: str = Query("extractBatch", description="log channel"),
 ):
     results = []
-
     for file in files:
         try:
             upload_path = file_service.save_upload(file)
         except ValueError as e:
-            results.append({
-                "file_name": file.filename,
-                "text": str(e),
-                "success": False,
-            })
+            results.append({"file_name": file.filename, "text": str(e), "success": False})
             continue
-
         try:
             params = blind_service.parse_params_from_filename(file.filename)
             length = params.get("wm_length")
-
             if not length:
-                result = blind_service.extract_auto(
-                    input_path=upload_path,
-                    password=password,
-                )
-                results.append({
-                    "file_name": file.filename,
-                    **result,
-                })
-                continue
-
-            result = blind_service.extract(
-                input_path=upload_path,
-                wm_length=length,
-                password=password,
-            )
-            results.append({
-                "file_name": file.filename,
-                **result,
-            })
+                result = blind_service.extract_auto(input_path=upload_path, password=password, channel_id=channel_id)
+            else:
+                result = blind_service.extract(input_path=upload_path, wm_length=length, password=password)
+            results.append({"file_name": file.filename, **result})
         finally:
             file_service.cleanup(upload_path)
-
     return {"items": results}
 
 
 @router.post("/embed/from-url")
-async def embed_watermark_from_url(
-    request: Request,
-    body: UrlEmbedRequest,
-):
-    """从 URL 下载图片并嵌入水印"""
+async def embed_watermark_from_url(request: Request, body: UrlEmbedRequest):
     async with _get_semaphore(request):
         try:
             upload_path = file_service.download_from_url(body.url)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
-
         try:
-            result = blind_service.embed(
-                input_path=upload_path,
-                watermark_text=body.text,
-                password=body.password,
-            )
+            result = blind_service.embed(input_path=upload_path, watermark_text=body.text, password=body.password)
             return result
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except Exception as e:
+            _logger.error(f"/embed/from-url unexpected: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"server error: {str(e)[:200]}")
         finally:
             file_service.cleanup(upload_path)
 
@@ -263,81 +197,46 @@ async def embed_watermark_from_url(
 async def extract_watermark_from_url(
     request: Request,
     body: UrlExtractRequest,
+    channel_id: str = Query("extract", description="log channel"),
 ):
-    """从 URL 下载图片并提取水印"""
-    _t0 = _time.time()
-    _logger.info(f"[TIMING] /extract/from-url 收到请求 url={body.url}")
-
     async with _get_semaphore(request):
         try:
             upload_path = await asyncio.to_thread(file_service.download_from_url, body.url)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
-        _t1 = _time.time()
-        _logger.info(f"[TIMING] /extract/from-url download 耗时: {_t1-_t0:.3f}s")
-
         try:
             params = blind_service.parse_params_from_filename(upload_path)
             length = body.wm_length or params.get("wm_length")
-            _t2 = _time.time()
-
             if length is None:
-                _logger.info(f"[TIMING] /extract/from-url 开始 extract_auto")
                 result = await asyncio.to_thread(
-                    blind_service.extract_auto,
-                    input_path=upload_path,
-                    password=body.password,
-                )
+                    blind_service.extract_auto, input_path=upload_path, password=body.password, channel_id=channel_id)
             else:
-                _logger.info(f"[TIMING] /extract/from-url 开始 extract wm_length={length}")
                 result = await asyncio.to_thread(
-                    blind_service.extract,
-                    input_path=upload_path,
-                    wm_length=length,
-                    password=body.password,
-                )
-
-            _t3 = _time.time()
-            _logger.info(f"[TIMING] /extract/from-url 提取耗时: {_t3-_t2:.3f}s 总耗时: {_t3-_t0:.3f}s")
+                    blind_service.extract, input_path=upload_path, wm_length=length, password=body.password)
             return result
         finally:
             file_service.cleanup(upload_path)
 
 
 @router.post("/embed/batch-from-url")
-async def embed_batch_from_url(
-    request: Request,
-    body: BatchUrlEmbedRequest,
-):
-    """从多个 URL 下载图片并批量嵌入水印"""
+async def embed_batch_from_url(request: Request, body: BatchUrlEmbedRequest):
     results = []
-
     for url in body.urls:
         try:
             upload_path = file_service.download_from_url(url)
             try:
-                result = blind_service.embed(
-                    input_path=upload_path,
-                    watermark_text=body.text,
-                    password=body.password,
-                )
+                result = blind_service.embed(input_path=upload_path, watermark_text=body.text, password=body.password)
                 results.append({
-                    "file_name": url,
-                    "success": True,
-                    "output_name": result["output_name"],
-                    "image_data": result["image_data"],
+                    "file_name": url, "success": True,
+                    "output_name": result["output_name"], "image_data": result["image_data"],
                     "has_password": result["has_password"],
                 })
             finally:
                 file_service.cleanup(upload_path)
-
+        except ValueError as e:
+            results.append({"file_name": url, "success": False, "error": str(e)})
         except Exception as e:
-            results.append({
-                "file_name": url,
-                "success": False,
-                "error": str(e),
-            })
-
+            results.append({"file_name": url, "success": False, "error": f"server error: {str(e)[:200]}"})
     return {"items": results}
 
 
@@ -345,48 +244,25 @@ async def embed_batch_from_url(
 async def extract_batch_from_url(
     request: Request,
     body: BatchUrlExtractRequest,
+    channel_id: str = Query("extractBatch", description="log channel"),
 ):
-    """从多个 URL 下载图片并批量提取水印"""
     results = []
-
     for url in body.urls:
         try:
             upload_path = file_service.download_from_url(url)
         except ValueError as e:
-            results.append({
-                "file_name": url,
-                "text": str(e),
-                "success": False,
-            })
+            results.append({"file_name": url, "text": str(e), "success": False})
             continue
-
         try:
             params = blind_service.parse_params_from_filename(upload_path)
             length = params.get("wm_length")
-
             if not length:
-                result = blind_service.extract_auto(
-                    input_path=upload_path,
-                    password=body.password,
-                )
-                results.append({
-                    "file_name": url,
-                    **result,
-                })
-                continue
-
-            result = blind_service.extract(
-                input_path=upload_path,
-                wm_length=length,
-                password=body.password,
-            )
-            results.append({
-                "file_name": url,
-                **result,
-            })
+                result = blind_service.extract_auto(input_path=upload_path, password=body.password, channel_id=channel_id)
+            else:
+                result = blind_service.extract(input_path=upload_path, wm_length=length, password=body.password)
+            results.append({"file_name": url, **result})
         finally:
             file_service.cleanup(upload_path)
-
     return {"items": results}
 
 
@@ -397,53 +273,35 @@ async def embed_multi_text(
     texts: str = Form(...),
     password: str = Form(""),
 ):
-    """多图分别水印：每张图片嵌入各自的水印文本"""
     import json
     try:
         text_list = json.loads(texts)
     except Exception:
-        raise HTTPException(status_code=400, detail="texts 格式错误，需要 JSON 数组")
-
+        raise HTTPException(status_code=400, detail="texts format error, need JSON array")
     if len(files) != len(text_list):
-        raise HTTPException(status_code=400, detail="图片数量与水印文本数量不一致")
-
+        raise HTTPException(status_code=400, detail="file count != text count")
     results = []
     for idx, file in enumerate(files):
         try:
             file_service.validate_image_type(file.filename)
             upload_path = file_service.save_upload(file)
-
             try:
                 wm_text = text_list[idx]
-                # 不用 output_name_override（避免中文路径问题），用默认名写入
-                result = blind_service.embed(
-                    input_path=upload_path,
-                    watermark_text=wm_text,
-                    password=password,
-                )
-                # 只在响应用生成带水印文本的文件名
+                result = blind_service.embed(input_path=upload_path, watermark_text=wm_text, password=password)
                 output_name = blind_service.build_output_name_with_text(
-                    file.filename, wm_text, result["wm_length"], password
-                )
+                    file.filename, wm_text, result["wm_length"], password)
                 result["output_name"] = output_name
                 results.append({
-                    "file_name": file.filename,
-                    "watermark_text": wm_text,
-                    "success": True,
-                    "output_name": output_name,
-                    "image_data": result["image_data"],
+                    "file_name": file.filename, "watermark_text": wm_text, "success": True,
+                    "output_name": output_name, "image_data": result["image_data"],
                     "has_password": result["has_password"],
                 })
             finally:
                 file_service.cleanup(upload_path)
-
+        except ValueError as e:
+            results.append({"file_name": file.filename, "success": False, "error": str(e)})
         except Exception as e:
-            results.append({
-                "file_name": file.filename,
-                "success": False,
-                "error": str(e),
-            })
-
+            results.append({"file_name": file.filename, "success": False, "error": f"server error: {str(e)[:200]}"})
     return {"items": results}
 
 
@@ -454,66 +312,49 @@ async def embed_one_to_multi(
     texts: str = Form(...),
     password: str = Form(""),
 ):
-    """一图多水印：同一张图片嵌入多个不同的水印文本"""
     import json
     try:
         text_list = json.loads(texts)
     except Exception:
-        raise HTTPException(status_code=400, detail="texts 格式错误，需要 JSON 数组")
-
+        raise HTTPException(status_code=400, detail="texts format error, need JSON array")
     if not text_list:
-        raise HTTPException(status_code=400, detail="至少需要提供一个水印文本")
-
+        raise HTTPException(status_code=400, detail="at least one text required")
     results = []
+    upload_path = None
     try:
         file_service.validate_image_type(file.filename)
         upload_path = file_service.save_upload(file)
-
         for wm_text in text_list:
             try:
-                result = blind_service.embed(
-                    input_path=upload_path,
-                    watermark_text=wm_text,
-                    password=password,
-                )
+                result = blind_service.embed(input_path=upload_path, watermark_text=wm_text, password=password)
                 output_name = blind_service.build_output_name_with_text(
-                    file.filename, wm_text, result["wm_length"], password
-                )
+                    file.filename, wm_text, result["wm_length"], password)
                 result["output_name"] = output_name
                 results.append({
-                    "file_name": file.filename,
-                    "watermark_text": wm_text,
-                    "success": True,
-                    "output_name": output_name,
-                    "image_data": result["image_data"],
+                    "file_name": file.filename, "watermark_text": wm_text, "success": True,
+                    "output_name": output_name, "image_data": result["image_data"],
                     "has_password": result["has_password"],
                 })
             except Exception as e:
                 results.append({
-                    "file_name": file.filename,
-                    "watermark_text": wm_text,
-                    "success": False,
-                    "error": str(e),
+                    "file_name": file.filename, "watermark_text": wm_text,
+                    "success": False, "error": str(e),
                 })
-
+    except ValueError as e:
+        results.append({"file_name": file.filename, "success": False, "error": str(e)})
     except Exception as e:
-        results.append({
-            "file_name": file.filename,
-            "success": False,
-            "error": str(e),
-        })
+        results.append({"file_name": file.filename, "success": False, "error": f"server error: {str(e)[:200]}"})
     finally:
-        try:
-            if upload_path:
-                file_service.cleanup(upload_path)
-        except NameError:
-            pass
-
+        if upload_path:
+            file_service.cleanup(upload_path)
     return {"items": results}
 
-@router.get("/logs")
-async def get_extract_logs():
-    """获取最近的盲水印提取调试日志（供前端轮询）。"""
-    from app.services.blind_service import get_recent_logs
-    return {"logs": get_recent_logs()}
 
+@router.get("/logs")
+async def get_extract_logs(
+    channel_id: str = Query("extract", description="log channel id"),
+    since: int = Query(0, description="last consumed position"),
+):
+    from app.services.blind_service import get_recent_logs
+    events, total = get_recent_logs(channel_id, since)
+    return {"logs": events, "total": total, "channel_id": channel_id}

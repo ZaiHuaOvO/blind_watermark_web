@@ -194,9 +194,25 @@ function getDebugPanel(storeName) {
   return panel;
 }
 
-function debugLog(panel, msg, cssClass) {
+function debugLog(panel, msg, cssClass, replacePrefix) {
   if (!panel) return;
   var time = new Date().toLocaleTimeString();
+
+  // 如果需要替换前一行（状态更新），找到以 replacePrefix 开头的行并替换
+  if (replacePrefix) {
+    var lastChild = panel.lastElementChild;
+    if (lastChild) {
+      var lastMsgSpan = lastChild.querySelector('span:last-child');
+      if (lastMsgSpan && lastMsgSpan.textContent.indexOf(replacePrefix) === 0) {
+        lastMsgSpan.textContent = msg;
+        // 更新时间戳
+        var timeSpan = lastChild.querySelector('span:first-child');
+        if (timeSpan) timeSpan.textContent = '[' + time + ']';
+        return;
+      }
+    }
+  }
+
   var line = document.createElement('div');
   var timeSpan = document.createElement('span');
   timeSpan.className = 'bwm-dlog-time';
@@ -211,23 +227,30 @@ function debugLog(panel, msg, cssClass) {
 }
 
 var _serverLogPolling = null;
+var _serverLogLastTotal = 0;
 
-function startServerLogPolling(panel, intervalMs) {
+function startServerLogPolling(panel, channelId, intervalMs) {
   stopServerLogPolling();
   if (!panel) return;
+  _serverLogLastTotal = 0;
   intervalMs = intervalMs || 2000;
   _serverLogPolling = setInterval(async function () {
     try {
-      var resp = await fetch('/api/watermark/logs');
+      var resp = await fetch('/api/watermark/logs?channel_id=' + encodeURIComponent(channelId) + '&since=' + _serverLogLastTotal);
       if (!resp.ok) return;
       var data = await resp.json();
+      if (data.total) _serverLogLastTotal = data.total;
       if (data.logs && data.logs.length) {
         data.logs.forEach(function (logMsg) {
           var cssClass = 'bwm-dlog-info';
-          if (logMsg.indexOf('✅') >= 0 || logMsg.indexOf('🎉') >= 0 || logMsg.indexOf('成功') >= 0) cssClass = 'bwm-dlog-ok';
-          else if (logMsg.indexOf('❌') >= 0 || logMsg.indexOf('😢') >= 0 || logMsg.indexOf('失败') >= 0 || logMsg.indexOf('错误') >= 0) cssClass = 'bwm-dlog-err';
-          else if (logMsg.indexOf('⚠') >= 0 || logMsg.indexOf('注意') >= 0) cssClass = 'bwm-dlog-warn';
-          debugLog(panel, logMsg, cssClass + ' bwm-dlog-server');
+          var replacePrefix = null;
+          if (logMsg.indexOf('成功') >= 0) cssClass = 'bwm-dlog-ok';
+          else if (logMsg.indexOf('失败') >= 0 || logMsg.indexOf('错误') >= 0) cssClass = 'bwm-dlog-err';
+          else if (logMsg.indexOf('正在扫描') >= 0) {
+            cssClass = 'bwm-dlog-info';
+            replacePrefix = '正在扫描';
+          }
+          debugLog(panel, logMsg, cssClass + ' bwm-dlog-server', replacePrefix);
         });
       }
     } catch (e) {
@@ -521,10 +544,10 @@ async function submitEmbedSingleFromUrl() {
   stopServerLogPolling();
   cleanupActiveProcess();
   if (cancelled) {
-    debugLog(debugPanel, '⛔ 处理已取消', 'bwm-dlog-warn');
+    debugLog(debugPanel, '处理已取消', 'bwm-dlog-warn');
     resultDiv.innerHTML = '<div class="bwm-alert bwm-alert--warning">处理已取消</div>'; setLoading(btn, false); return;
   }
-  debugLog(debugPanel, '✅ 批量提取完成！', 'bwm-dlog-ok');
+  debugLog(debugPanel, '批量提取完成', 'bwm-dlog-ok');
   renderUrlResults(allResults, resultDiv, zipData, 'watermarked_url.zip', '嵌入');
   setLoading(btn, false);
 }
@@ -591,15 +614,15 @@ async function submitExtractSingleFromUrl() {
     document.getElementById('toggleDebugBtn').textContent = '隐藏调试';
     document.getElementById('toggleDebugBtn').style.opacity = '1';
   }
-  debugLog(debugPanel, '🚀 开始从 URL 提取盲水印...', 'bwm-dlog-ok');
-  startServerLogPolling(debugPanel, 1500);
+  debugLog(debugPanel, '开始从 URL 提取盲水印...', 'bwm-dlog-ok');
+  startServerLogPolling(debugPanel, 'extractSingle', 1500);
   var controller = startCancelableProcess('extractResultSingle');
   var signal = controller.signal;
   var results = []; var cancelled = false;
   for (var i = 0; i < urls.length; i++) {
     if (signal.aborted) { cancelled = true; break; }
     try {
-      var resp = await fetch('/api/watermark/extract/from-url', {
+      var resp = await fetch('/api/watermark/extract/from-url?channel_id=extractSingle', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: urls[i], password: password }),
@@ -620,10 +643,10 @@ async function submitExtractSingleFromUrl() {
   stopServerLogPolling();
   cleanupActiveProcess();
   if (cancelled) {
-    debugLog(debugPanel, '⛔ 处理已取消', 'bwm-dlog-warn');
+    debugLog(debugPanel, '处理已取消', 'bwm-dlog-warn');
     resultDiv.innerHTML = '<div class="bwm-alert bwm-alert--warning">处理已取消</div>'; setLoading(btn, false); return;
   }
-  debugLog(debugPanel, '✅ 提取完成！', 'bwm-dlog-ok');
+  debugLog(debugPanel, '提取完成', 'bwm-dlog-ok');
   renderExtractUrlResults(results, resultDiv, '提取');
   setLoading(btn, false);
 }
@@ -642,15 +665,15 @@ async function submitExtractBatchFromUrl() {
     document.getElementById('toggleDebugBtn').textContent = '隐藏调试';
     document.getElementById('toggleDebugBtn').style.opacity = '1';
   }
-  debugLog(debugPanel, '🚀 开始从 URL 批量提取盲水印...', 'bwm-dlog-ok');
-  startServerLogPolling(debugPanel, 2000);
+  debugLog(debugPanel, '开始从 URL 批量提取盲水印...', 'bwm-dlog-ok');
+  startServerLogPolling(debugPanel, 'extractBatch', 2000);
   var controller = startCancelableProcess('extractResultBatch');
   var signal = controller.signal;
   var results = []; var cancelled = false;
   for (var i = 0; i < urls.length; i++) {
     if (signal.aborted) { cancelled = true; break; }
     try {
-      var resp = await fetch('/api/watermark/extract/from-url', {
+      var resp = await fetch('/api/watermark/extract/from-url?channel_id=extractBatch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: urls[i], password: password }),
@@ -671,10 +694,10 @@ async function submitExtractBatchFromUrl() {
   stopServerLogPolling();
   cleanupActiveProcess();
   if (cancelled) {
-    debugLog(debugPanel, '⛔ 处理已取消', 'bwm-dlog-warn');
+    debugLog(debugPanel, '处理已取消', 'bwm-dlog-warn');
     resultDiv.innerHTML = '<div class="bwm-alert bwm-alert--warning">处理已取消</div>'; setLoading(btn, false); return;
   }
-  debugLog(debugPanel, '✅ 批量提取完成！', 'bwm-dlog-ok');
+  debugLog(debugPanel, '批量提取完成', 'bwm-dlog-ok');
   renderExtractUrlResults(results, resultDiv, '提取');
   setLoading(btn, false);
 }
@@ -1176,8 +1199,8 @@ async function submitExtractSingle() {
     document.getElementById('toggleDebugBtn').textContent = '隐藏调试';
     document.getElementById('toggleDebugBtn').style.opacity = '1';
   }
-  debugLog(debugPanel, '🚀 开始提取盲水印...', 'bwm-dlog-ok');
-  startServerLogPolling(debugPanel, 1500);
+  debugLog(debugPanel, '开始提取盲水印...', 'bwm-dlog-ok');
+  startServerLogPolling(debugPanel, 'extractSingle', 1500);
   var controller = startCancelableProcess('extractResultSingle');
   var signal = controller.signal;
   var results = []; var cancelled = false;
@@ -1187,7 +1210,7 @@ async function submitExtractSingle() {
     fd.append('password', password);
     fd.append('file', files[i]);
     try {
-      var resp = await fetch('/api/watermark/extract', { method: 'POST', body: fd, signal: signal });
+      var resp = await fetch('/api/watermark/extract?channel_id=extractSingle', { method: 'POST', body: fd, signal: signal });
       if (!resp.ok) {
         var errMsg = '失败';
         try { var errData = await resp.json(); errMsg = errData.detail || errData.text || errMsg; } catch (e) { errMsg = resp.status + ' ' + resp.statusText; }
@@ -1203,10 +1226,10 @@ async function submitExtractSingle() {
   stopServerLogPolling();
   cleanupActiveProcess();
   if (cancelled) {
-    debugLog(debugPanel, '⛔ 处理已取消', 'bwm-dlog-warn');
+    debugLog(debugPanel, '处理已取消', 'bwm-dlog-warn');
     resultDiv.innerHTML = '<div class="bwm-alert bwm-alert--warning">处理已取消</div>'; setLoading(btn, false); return;
   }
-  debugLog(debugPanel, '✅ 提取完成！正在整理结果...', 'bwm-dlog-ok');
+  debugLog(debugPanel, '提取完成，正在整理结果...', 'bwm-dlog-ok');
   var html = '<ul class="bwm-result-list">';
   results.forEach(function (r) {
     var icon = r.success ? '✅' : (r.text.indexOf('密码') >= 0 ? '🔑' : '❌');
@@ -1237,8 +1260,8 @@ async function submitExtractBatch() {
     document.getElementById('toggleDebugBtn').textContent = '隐藏调试';
     document.getElementById('toggleDebugBtn').style.opacity = '1';
   }
-  debugLog(debugPanel, '🚀 开始批量提取盲水印...', 'bwm-dlog-ok');
-  startServerLogPolling(debugPanel, 2000);
+  debugLog(debugPanel, '开始批量提取盲水印...', 'bwm-dlog-ok');
+  startServerLogPolling(debugPanel, 'extractBatch', 2000);
   var controller = startCancelableProcess('extractResultBatch');
   var signal = controller.signal;
   var results = []; var cancelled = false;
@@ -1250,7 +1273,7 @@ async function submitExtractBatch() {
     fd.append('password', password);
     fd.append('file', files[i]);
     try {
-      var resp = await fetch('/api/watermark/extract', { method: 'POST', body: fd, signal: signal });
+      var resp = await fetch('/api/watermark/extract?channel_id=extractBatch', { method: 'POST', body: fd, signal: signal });
       if (!resp.ok) {
         var errMsg = '失败';
         try { var errData = await resp.json(); errMsg = errData.detail || errData.text || errMsg; } catch (e) { errMsg = resp.status + ' ' + resp.statusText; }
@@ -1269,7 +1292,7 @@ async function submitExtractBatch() {
     for (var k = 0; k < urls.length; k++) {
       if (signal.aborted) { cancelled = true; break; }
       try {
-        var resp2 = await fetch('/api/watermark/extract/from-url', {
+        var resp2 = await fetch('/api/watermark/extract/from-url?channel_id=extractBatch', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ url: urls[k], password: password }),
@@ -1292,10 +1315,10 @@ async function submitExtractBatch() {
   stopServerLogPolling();
   cleanupActiveProcess();
   if (cancelled) {
-    debugLog(debugPanel, '⛔ 处理已取消', 'bwm-dlog-warn');
+    debugLog(debugPanel, '处理已取消', 'bwm-dlog-warn');
     resultDiv.innerHTML = '<div class="bwm-alert bwm-alert--warning">处理已取消</div>'; setLoading(btn, false); return;
   }
-  debugLog(debugPanel, '✅ 批量提取完成！正在整理结果...', 'bwm-dlog-ok');
+  debugLog(debugPanel, '批量提取完成，正在整理结果...', 'bwm-dlog-ok');
   var html = '<ul class="bwm-result-list">';
   results.forEach(function (r) {
     var icon = r.success ? '✅' : (r.text.indexOf('密码') >= 0 ? '🔑' : '❌');
@@ -1367,7 +1390,17 @@ async function updateStorageInfo() {
 }
 
 function resetAll() {
+  // 终止所有进行中的请求
   cleanupActiveProcess();
+  stopServerLogPolling();
+  // 重置所有按钮的加载状态
+  var allBtns = document.querySelectorAll('.bwm-btn');
+  allBtns.forEach(function(btn) {
+    if (btn.disabled && btn.dataset.originalText) {
+      btn.disabled = false;
+      btn.innerHTML = btn.dataset.originalText;
+    }
+  });
   for (var key in imageStore) imageStore[key] = [];
   ['embedPreviewSingle', 'extractPreviewSingle', 'embedPreviewBatch', 'extractPreviewBatch', 'perOneMultiPreview'].forEach(function (id) {
     var el = document.getElementById(id);
@@ -1376,6 +1409,13 @@ function resetAll() {
   ['embedResultSingle', 'extractResultSingle', 'embedResultBatch', 'extractResultBatch', 'perMultiResult', 'perOneMultiResult'].forEach(function (id) {
     var el = document.getElementById(id);
     if (el) el.innerHTML = '';
+  });
+  // 清空调试面板
+  ['embedResultSingle', 'extractResultSingle', 'embedResultBatch', 'extractResultBatch', 'perMultiResult', 'perOneMultiResult'].forEach(function (id) {
+    var container = document.getElementById(id);
+    if (!container) return;
+    var panel = container.parentNode.querySelector('.bwm-debug');
+    if (panel) panel.innerHTML = '';
   });
   // 重置粘贴结果
   ['embedSingle', 'extractSingle', 'embedBatch', 'extractBatch', 'perMulti', 'perOneMulti'].forEach(function (area) {
@@ -1424,7 +1464,7 @@ function toggleDebugAll() {
   if (show) {
     panels.forEach(function (p) {
       // 一次性拉取历史
-      fetch('/api/watermark/logs').then(function (r) { return r.json(); }).then(function (d) {
+      fetch('/api/watermark/logs?since=0').then(function (r) { return r.json(); }).then(function (d) {
         if (d.logs && d.logs.length) {
           d.logs.forEach(function (l) {
             debugLog(p, l, 'bwm-dlog-server');
