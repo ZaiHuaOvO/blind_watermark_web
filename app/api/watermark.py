@@ -356,14 +356,13 @@ async def embed_multi_text(
 
             try:
                 wm_text = text_list[idx]
+                # 不用 output_name_override（避免中文路径问题），用默认名写入
                 result = blind_service.embed(
                     input_path=upload_path,
                     watermark_text=wm_text,
                     password=password,
-                    output_name_override=blind_service.build_output_name_with_text(
-                        file.filename, wm_text, 0, password
-                    ),
                 )
+                # 只在响应用生成带水印文本的文件名
                 output_name = blind_service.build_output_name_with_text(
                     file.filename, wm_text, result["wm_length"], password
                 )
@@ -372,7 +371,7 @@ async def embed_multi_text(
                     "file_name": file.filename,
                     "watermark_text": wm_text,
                     "success": True,
-                    "output_name": result["output_name"],
+                    "output_name": output_name,
                     "image_data": result["image_data"],
                     "has_password": result["has_password"],
                 })
@@ -417,9 +416,6 @@ async def embed_one_to_multi(
                     input_path=upload_path,
                     watermark_text=wm_text,
                     password=password,
-                    output_name_override=blind_service.build_output_name_with_text(
-                        file.filename, wm_text, 0, password
-                    ),
                 )
                 output_name = blind_service.build_output_name_with_text(
                     file.filename, wm_text, result["wm_length"], password

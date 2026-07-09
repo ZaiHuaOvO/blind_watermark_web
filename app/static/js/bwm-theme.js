@@ -743,6 +743,13 @@ async function submitPerMulti() {
     data.items.forEach(function (r) {
       if (r.success) {
         zipData.push({ base64Data: r.image_data, filename: r.output_name });
+        // 保存到历史队列
+        try {
+          var bs = atob(r.image_data.split(',')[1]), mt = r.image_data.split(',')[0].match(/:(.*?);/)[1];
+          var ab = new ArrayBuffer(bs.length), ia = new Uint8Array(ab);
+          for (var j = 0; j < bs.length; j++) ia[j] = bs.charCodeAt(j);
+          addHistory({ original_name: r.file_name, output_name: r.output_name, watermark_text: r.watermark_text, has_password: !!password, wm_length: r.wm_length || 0, image_blob: new Blob([ab], { type: mt }) });
+        } catch (e) { console.warn('历史保存失败', e); }
       }
     });
   } catch (e) {
@@ -775,32 +782,39 @@ async function submitPerMulti() {
 }
 
 // 一图多水印 - 动态 input 管理
+var perOneMultiTexts = ['', ''];  // 初始 2 个空文本
+
 function renderPerOneMultiInputs() {
   var container = document.getElementById('perOneMultiInputs');
-  var count = perOneMultiTextCount;
+  if (!container) return;
   var html = '';
-  for (var i = 0; i < count; i++) {
+  for (var i = 0; i < perOneMultiTexts.length; i++) {
     html += '<div class="bwm-per-multi-row">';
     html += '<span class="bwm-per-multi-label">水印 ' + (i + 1) + '</span>';
-    html += '<input type="text" class="bwm-per-multi-input" data-wmidx="' + i + '" placeholder="输入水印文本">';
+    html += '<input type="text" class="bwm-per-multi-input" data-wmidx="' + i + '" value="' + escapeHtml(perOneMultiTexts[i]) + '" placeholder="输入水印文本">';
     html += '<button class="bwm-per-multi-del" onclick="removePerOneMultiInput(' + i + ')" title="删除此水印">✖</button>';
     html += '</div>';
   }
   container.innerHTML = html;
+  // 重新绑定 input 事件，实时同步到数组
+  container.querySelectorAll('.bwm-per-multi-input').forEach(function (el) {
+    el.addEventListener('input', function () {
+      var idx = parseInt(this.dataset.wmidx);
+      if (!isNaN(idx) && idx < perOneMultiTexts.length) {
+        perOneMultiTexts[idx] = this.value;
+      }
+    });
+  });
 }
 
-var perOneMultiTextCount = 2;
-
 function addPerOneMultiInput() {
-  perOneMultiTextCount++;
+  perOneMultiTexts.push('');
   renderPerOneMultiInputs();
 }
 
 function removePerOneMultiInput(idx) {
-  // 最少保留 1 个
-  if (perOneMultiTextCount <= 1) { showToast('至少保留一个水印', 'warning'); return; }
-  // 移除第 idx 个：重新计数
-  perOneMultiTextCount--;
+  if (perOneMultiTexts.length <= 1) { showToast('至少保留一个水印', 'warning'); return; }
+  perOneMultiTexts.splice(idx, 1);
   renderPerOneMultiInputs();
 }
 
@@ -810,17 +824,10 @@ async function submitPerOneMulti() {
   var btn = document.querySelector('[data-action="submitPerOneMulti"]');
   if (!files.length) { showToast('请选择图片', 'error'); return; }
 
-  // 收集所有水印文本
-  var texts = [];
-  var inputEls = document.querySelectorAll('#perOneMultiInputs .bwm-per-multi-input');
-  var allValid = true;
-  inputEls.forEach(function (el) {
-    var val = el.value.trim();
-    if (!val) { allValid = false; texts.push(''); }
-    else { texts.push(val); }
-  });
+  // 收集所有水印文本（从数组，比 DOM 更可靠）
+  var texts = perOneMultiTexts.map(function (s) { return s.trim(); });
+  var allValid = texts.every(function (s) { return s.length > 0; });
   if (!allValid) { showToast('水印文本不能为空', 'error'); return; }
-
   if (!texts.length) { showToast('请至少添加一个水印文本', 'error'); return; }
 
   setLoading(btn, true);
@@ -852,6 +859,13 @@ async function submitPerOneMulti() {
     data.items.forEach(function (r) {
       if (r.success) {
         zipData.push({ base64Data: r.image_data, filename: r.output_name });
+        // 保存到历史队列
+        try {
+          var bs = atob(r.image_data.split(',')[1]), mt = r.image_data.split(',')[0].match(/:(.*?);/)[1];
+          var ab = new ArrayBuffer(bs.length), ia = new Uint8Array(ab);
+          for (var j = 0; j < bs.length; j++) ia[j] = bs.charCodeAt(j);
+          addHistory({ original_name: r.file_name, output_name: r.output_name, watermark_text: r.watermark_text, has_password: !!password, wm_length: r.wm_length || 0, image_blob: new Blob([ab], { type: mt }) });
+        } catch (e) { console.warn('历史保存失败', e); }
       }
     });
   } catch (e) {
@@ -1284,7 +1298,7 @@ function resetAll() {
   // 重置逐张处理相关
   var perMultiList = document.getElementById('perMultiList');
   if (perMultiList) perMultiList.innerHTML = '';
-  perOneMultiTextCount = 2;
+  perOneMultiTexts = ['', ''];
   renderPerOneMultiInputs();
   showToast('工作队列已重置', 'info');
 }
