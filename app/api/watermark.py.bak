@@ -5,23 +5,12 @@ All interfaces implement "delete-after-use" temporary file strategy.
 Embed endpoints return base64 image data, no files retained on server.
 """
 
-import asyncio
-import logging
-import time
 from typing import Optional
 
 from fastapi import APIRouter, UploadFile, File, Form, Request, HTTPException
 from pydantic import BaseModel
 
 from app.services import blind_service, file_service
-
-_logger = logging.getLogger("watermark_api")
-_logger.setLevel(logging.INFO)
-if not _logger.handlers:
-    _handler = logging.StreamHandler()
-    _handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
-    _logger.addHandler(_handler)
-
 
 router = APIRouter()
 
@@ -60,34 +49,22 @@ async def embed_watermark(
     text: str = Form(...),
     password: str = Form(""),
 ):
-    _t0 = _time.time()
-    _logger.info(f"[TIMING] /embed 收到请求 file={file.filename}")
-
     async with _get_semaphore(request):
-        _t1 = _time.time()
-        _logger.info(f"[TIMING] /embed 获取信号量耗时: {_t1-_t0:.3f}s")
         try:
             file_service.validate_image_type(file.filename)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
         try:
-            upload_path = await asyncio.to_thread(file_service.save_upload, file)
+            upload_path = file_service.save_upload(file)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
-        _t2 = _time.time()
-        _logger.info(f"[TIMING] /embed save_upload 耗时: {_t2-_t1:.3f}s")
 
         try:
-            _logger.info(f"[TIMING] /embed 开始 embed text='{text[:20]}'")
-            result = await asyncio.to_thread(
-                blind_service.embed,
+            result = blind_service.embed(
                 input_path=upload_path,
                 watermark_text=text,
                 password=password,
             )
-            _t3 = _time.time()
-            _logger.info(f"[TIMING] /embed 嵌入耗时: {_t3-_t2:.3f}s")
-            _logger.info(f"[TIMING] /embed 总耗时: {_t3-_t0:.3f}s")
             return result
         finally:
             file_service.cleanup(upload_path)
@@ -100,49 +77,27 @@ async def extract_watermark(
     password: str = Form(""),
     wm_length: int = Form(None),
 ):
-    _t0 = _time.time()
-    _logger.info(f"[TIMING] /extract 收到请求 file={file.filename}")
-
     async with _get_semaphore(request):
-        _t1 = _time.time()
-        _logger.info(f"[TIMING] /extract 获取信号量耗时: {_t1-_t0:.3f}s")
-
         try:
-            # save_upload 中有同步 read，放到线程池
-            upload_path = await asyncio.to_thread(file_service.save_upload, file)
+            upload_path = file_service.save_upload(file)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
-        _t2 = _time.time()
-        _logger.info(f"[TIMING] /extract save_upload 耗时: {_t2-_t1:.3f}s")
 
         try:
             params = blind_service.parse_params_from_filename(file.filename)
             length = wm_length or params.get("wm_length")
-            _t3 = _time.time()
 
             if length is None:
-                _logger.info(f"[TIMING] /extract 开始 extract_auto (自动检测长度)")
-                # extract_auto 是同步CPU密集型，放到线程池避免阻塞事件循环
-                result = await asyncio.to_thread(
-                    blind_service.extract_auto,
+                return blind_service.extract_auto(
                     input_path=upload_path,
                     password=password,
                 )
-            else:
-                _logger.info(f"[TIMING] /extract 开始 extract wm_length={length}")
-                # extract 也是同步CPU密集型
-                result = await asyncio.to_thread(
-                    blind_service.extract,
-                    input_path=upload_path,
-                    wm_length=length,
-                    password=password,
-                )
 
-            _t4 = _time.time()
-            _logger.info(f"[TIMING] /extract 盲水印提取耗时: {_t4-_t3:.3f}s")
-            _logger.info(f"[TIMING] /extract 总耗时: {_t4-_t0:.3f}s result_success={result.get('success')}")
-
-            return result
+            return blind_service.extract(
+                input_path=upload_path,
+                wm_length=length,
+                password=password,
+            )
         finally:
             file_service.cleanup(upload_path)
 
@@ -265,41 +220,27 @@ async def extract_watermark_from_url(
     body: UrlExtractRequest,
 ):
     """从 URL 下载图片并提取水印"""
-    _t0 = _time.time()
-    _logger.info(f"[TIMING] /extract/from-url 收到请求 url={body.url}")
-
     async with _get_semaphore(request):
         try:
-            upload_path = await asyncio.to_thread(file_service.download_from_url, body.url)
+            upload_path = file_service.download_from_url(body.url)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
-        _t1 = _time.time()
-        _logger.info(f"[TIMING] /extract/from-url download 耗时: {_t1-_t0:.3f}s")
 
         try:
             params = blind_service.parse_params_from_filename(upload_path)
             length = body.wm_length or params.get("wm_length")
-            _t2 = _time.time()
 
             if length is None:
-                _logger.info(f"[TIMING] /extract/from-url 开始 extract_auto")
-                result = await asyncio.to_thread(
-                    blind_service.extract_auto,
+                return blind_service.extract_auto(
                     input_path=upload_path,
-                    password=body.password,
-                )
-            else:
-                _logger.info(f"[TIMING] /extract/from-url 开始 extract wm_length={length}")
-                result = await asyncio.to_thread(
-                    blind_service.extract,
-                    input_path=upload_path,
-                    wm_length=length,
                     password=body.password,
                 )
 
-            _t3 = _time.time()
-            _logger.info(f"[TIMING] /extract/from-url 提取耗时: {_t3-_t2:.3f}s 总耗时: {_t3-_t0:.3f}s")
-            return result
+            return blind_service.extract(
+                input_path=upload_path,
+                wm_length=length,
+                password=body.password,
+            )
         finally:
             file_service.cleanup(upload_path)
 
@@ -510,10 +451,3 @@ async def embed_one_to_multi(
             pass
 
     return {"items": results}
-
-@router.get("/logs")
-async def get_extract_logs():
-    """获取最近的盲水印提取调试日志（供前端轮询）。"""
-    from app.services.blind_service import get_recent_logs
-    return {"logs": get_recent_logs()}
-

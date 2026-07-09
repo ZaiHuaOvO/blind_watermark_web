@@ -20,18 +20,21 @@ import hashlib
 import base64
 import mimetypes
 import uuid
+import time
+import logging
 from pathlib import Path
 from typing import Optional
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
+import cv2
+import numpy as np
 from blind_watermark import WaterMark
+
+_logger = logging.getLogger("blind_service")
 
 
 def _resolve_password(password: Optional[str]) -> int:
-    """将用户输入的字符串密码映射为 WaterMark 构造函数的 int 参数。
-
-    使用 SHA256 哈希的前 8 位 hex 转为 int，确保任意字符串都能映射到 int 空间。
-    空密码默认为 1（与原库默认值一致）。
-    """
+    """将用户输入的字符串密码映射为 WaterMark 构造函数的 int 参数。"""
     if not password or password.strip() == "":
         return 1
     hash_val = hashlib.sha256(password.encode("utf-8")).hexdigest()
@@ -39,7 +42,6 @@ def _resolve_password(password: Optional[str]) -> int:
 
 
 def _password_hash_prefix(password: str) -> str:
-    """计算密码的短哈希摘要（仅用于文件名标识，非安全用途）。"""
     if not password or password.strip() == "":
         return "default"
     hash_val = hashlib.sha256(password.encode("utf-8")).hexdigest()
@@ -47,12 +49,6 @@ def _password_hash_prefix(password: str) -> str:
 
 
 def build_output_name(original_name: str, watermark_text: str) -> str:
-    """生成符合新命名规范的输出文件名。
-
-    格式：原图名字_水印文本_4位uuid.扩展名
-    4位uuid从 uuid4 取前4位 hex，确保短且唯一。
-    水印文本取前20字符，替换不安全字符。
-    """
     p = Path(original_name)
     safe_text = watermark_text.strip()[:20]
     safe_text = re.sub(r'[\\/:*?"<>|]', '_', safe_text)
@@ -61,19 +57,10 @@ def build_output_name(original_name: str, watermark_text: str) -> str:
 
 
 def build_output_name_with_text(original_name: str, watermark_text: str, wm_length: int, password: str = "") -> str:
-    """生成带水印文本的输出文件名（兼容旧接口）。
-
-    新命名规范统一使用 build_output_name 格式。
-    此函数保留签名兼容，内部委托给 build_output_name。
-    """
     return build_output_name(original_name, watermark_text)
 
 
 def parse_params_from_filename(filename: str) -> dict:
-    """从文件名反向解析参数。
-
-    匹配格式：*_blind_watermark_wm{NUM}_pwd{STR}.ext
-    """
     match = re.search(r'_blind_watermark_wm(\d+)_pwd(\w+)\.\w+$', filename)
     if match:
         return {
@@ -84,11 +71,6 @@ def parse_params_from_filename(filename: str) -> dict:
 
 
 def _img_to_base64(image_path: str) -> str:
-    """将图片文件读取为 base64 数据 URI。
-
-    返回格式如: data:image/jpeg;base64,/9j/4AAQ...
-    浏览器可以直接赋值给 <img src="..."> 或用于下载。
-    """
     ext = Path(image_path).suffix.lower()
     mime = mimetypes.types_map.get(ext, "image/png")
     with open(image_path, "rb") as f:
@@ -97,25 +79,85 @@ def _img_to_base64(image_path: str) -> str:
     return f"data:{mime};base64,{encoded}"
 
 
-def embed(input_path: str, watermark_text: str, password: str = "", output_dir: str = None, output_name_override: str = None) -> dict:
-    """嵌入文本盲水印。
+# ── 图像缩小辅助 ──────────────────────────────────────────
 
-    Args:
-        input_path: 输入图片绝对路径
-        watermark_text: 水印文本
-        password: 嵌入密码（留空使用默认密码）
-        output_dir: 输出目录（默认使用系统临时目录）
-        output_name_override: 自定义输出文件名（不指定则自动生成）
-
-    Returns:
-        dict: { output_name, image_data, wm_length, has_password }
+def _resize_if_needed(input_path: str, max_long_edge: int = 1200) -> tuple:
+    """如果图片长边过大，等比缩小到 max_long_edge 像素。
+    Returns: (处理后的路径, 是否缩小了, 原始尺寸 (w, h))
     """
+    img = cv2.imread(input_path, cv2.IMREAD_UNCHANGED)
+    if img is None:
+        return input_path, False, (0, 0)
+
+    h, w = img.shape[:2]
+    orig_size = (w, h)
+    long_edge = max(w, h)
+
+    if long_edge <= max_long_edge:
+        return input_path, False, orig_size
+
+    scale = max_long_edge / long_edge
+    new_w, new_h = int(w * scale), int(h * scale)
+    resized = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
+
+    ext = Path(input_path).suffix.lower()
+    out_path = input_path + "_resized" + ext
+    cv2.imwrite(out_path, resized)
+
+    _logger.info(f"[SHRINK] {Path(input_path).name} {w}x{h} -> {new_w}x{new_h}")
+    return out_path, True, orig_size
+
+
+def _try_extract(input_path: str, wm_length: int, password_int: int) -> dict:
+    """单次盲水印提取尝试，返回 {text, success, wm_length}。"""
+    try:
+        bwm = WaterMark(password_img=1, password_wm=password_int)
+        wm_extract = bwm.extract(filename=input_path, wm_shape=wm_length, mode="str")
+        if wm_extract and wm_extract.strip() and "�" not in wm_extract:
+            return {"text": wm_extract.strip(), "success": True, "wm_length": wm_length}
+    except Exception:
+        pass
+    return {"text": "", "success": False, "wm_length": wm_length}
+
+
+# ── 调试事件收集 ──────────────────────────────────────────
+
+_LOG_EVENTS = []
+_RECENT_EVENTS = []  # 保留最近 200 条给 /api/watermark/logs
+
+
+def _log_event(msg: str):
+    _logger.info(f"[EVENT] {msg}")
+    _LOG_EVENTS.append(msg)
+    _RECENT_EVENTS.append(msg)
+    if len(_RECENT_EVENTS) > 200:
+        _RECENT_EVENTS.pop(0)
+
+
+def get_log_events() -> list:
+    events = list(_LOG_EVENTS)
+    _LOG_EVENTS.clear()
+    return events
+
+
+def get_recent_logs() -> list:
+    return list(_RECENT_EVENTS)
+
+
+# ── 线程池 ────────────────────────────────────────────────
+
+_EXECUTOR = ThreadPoolExecutor(max_workers=4)
+
+
+# ── 嵌入 ──────────────────────────────────────────────────
+
+def embed(input_path: str, watermark_text: str, password: str = "",
+          output_dir: str = None, output_name_override: str = None) -> dict:
     output_dir = output_dir or os.environ.get("TEMP_DIR", "/tmp/blind_watermark_uploads")
     os.makedirs(output_dir, exist_ok=True)
 
     password_int = _resolve_password(password)
 
-    # 第一步：临时嵌入，获取 wm_length
     temp_name = f"_temp_{Path(input_path).stem}.png"
     temp_path = str(Path(output_dir) / temp_name)
 
@@ -125,7 +167,6 @@ def embed(input_path: str, watermark_text: str, password: str = "", output_dir: 
     wm_length = bwm.wm_size
     bwm.embed(filename=temp_path)
 
-    # 第二步：以正确文件名重新嵌入
     if output_name_override:
         output_name = output_name_override
     else:
@@ -137,14 +178,10 @@ def embed(input_path: str, watermark_text: str, password: str = "", output_dir: 
     bwm.read_wm(watermark_text, mode="str")
     bwm.embed(filename=output_path)
 
-    # 清理临时文件
     if os.path.exists(temp_path):
         os.remove(temp_path)
 
-    # 读取为 base64
     image_data = _img_to_base64(output_path)
-
-    # 删除输出文件（服务器不留任何文件）
     os.remove(output_path)
 
     return {
@@ -155,48 +192,121 @@ def embed(input_path: str, watermark_text: str, password: str = "", output_dir: 
     }
 
 
-def extract_auto(input_path: str, password: str = "") -> dict:
+# ── 改进版 extract_auto（并行 + 缩小加速） ────────────
+
+def extract_auto(input_path: str, password: str = "", _progress_callback=None) -> dict:
     """自动检测水印长度并提取盲水印。
 
-    当无法从文件名获取水印长度时，尝试多种常见长度自动检测。
-    优先返回第一个不含乱码的有效文本。
+    优化策略：
+    1. 图像缩小加速（长边 > 1200px 时等比缩小）
+    2. 先并行尝试常见长度，分组选出候选
+    3. 用原图回退验证
+
+    Args:
+        input_path: 图片路径
+        password: 密码
+        _progress_callback: 可选进度回调 (msg: str) -> None
+
+    Returns:
+        dict: {text, success, wm_length}
     """
+    def _log(msg):
+        _log_event(msg)
+        if _progress_callback:
+            _progress_callback(msg)
+
     password_int = _resolve_password(password)
 
-    # 常见水印长度候选集（比特数）
-    # 覆盖: 1~20 中文字符(UTF-8: 24n) + 1~30 ASCII字符(8n)
-    candidates = set()
-    for i in range(24, 481, 24):   # 1~20 中文字
-        candidates.add(i)
-    for i in range(8, 241, 8):     # 1~30 ASCII
-        candidates.add(i)
-    candidates = sorted(candidates)  # ~35 个
+    _log(f"📸 读取图片: {Path(input_path).name}")
+    t0 = time.time()
 
-    for wm_length in candidates:
-        try:
-            bwm = WaterMark(password_img=1, password_wm=password_int)
-            wm_extract = bwm.extract(filename=input_path, wm_shape=wm_length, mode="str")
-            if wm_extract and wm_extract.strip() and "�" not in wm_extract:
-                return {"text": wm_extract.strip(), "success": True, "wm_length": wm_length}
-        except Exception:
-            continue
+    # 1. 缩小
+    shrunk_path, did_shrink, orig_size = _resize_if_needed(input_path, max_long_edge=1200)
+    processing_path = shrunk_path
+    _log(f"📐 原始尺寸: {orig_size[0]}x{orig_size[1]}" +
+         (f" → 缩小到长边1200" if did_shrink else " (无需缩小)"))
 
+    # 2. 候选长度
+    common = list(range(24, 121, 24))      # 1~5 中文字
+    common += list(range(8, 49, 8))        # 1~6 ASCII
+    common += list(range(144, 481, 24))    # 6~20 中文字
+    common += list(range(56, 241, 16))     # 7~30 ASCII
+    all_candidates = sorted(set(common))
+    _log(f"🔢 候选长度: {len(all_candidates)} 种")
+
+    # 3. 并行扫描（4 个一组）
+    BATCH_SIZE = 4
+    found = None
+
+    for batch_start in range(0, len(all_candidates), BATCH_SIZE):
+        batch = all_candidates[batch_start:batch_start + BATCH_SIZE]
+        _log(f"🔍 尝试 {batch[0]}~{batch[-1]}...")
+
+        futures = {}
+        for wl in batch:
+            futures[_EXECUTOR.submit(_try_extract, processing_path, wl, password_int)] = wl
+
+        for future in as_completed(futures):
+            result = future.result()
+            if result["success"]:
+                found = result
+                for f in futures:
+                    f.cancel()
+                break
+
+        if found:
+            _log(f"✅ 发现水印: 长度={found['wm_length']}, 文本='{found['text']}'")
+            break
+        _log(f"❌ 无匹配，继续...")
+
+    # 4. 缩小图没找到 → 原图重试
+    if not found and did_shrink:
+        _log(f"🔄 缩略图未找到，尝试原图...")
+        processing_path = input_path
+        for batch_start in range(0, len(all_candidates), BATCH_SIZE):
+            batch = all_candidates[batch_start:batch_start + BATCH_SIZE]
+            futures = {}
+            for wl in batch:
+                futures[_EXECUTOR.submit(_try_extract, processing_path, wl, password_int)] = wl
+            for future in as_completed(futures):
+                result = future.result()
+                if result["success"]:
+                    found = result
+                    for f in futures:
+                        f.cancel()
+                    break
+            if found:
+                _log(f"✅ 原图发现: 长度={found['wm_length']}, 文本='{found['text']}'")
+                break
+            _log(f"❌ 无匹配，继续...")
+
+    # 5. 验证
+    if found and did_shrink:
+        _log(f"🔬 原图验证长度={found['wm_length']}...")
+        verify = _try_extract(input_path, found["wm_length"], password_int)
+        if verify["success"]:
+            _log(f"✅ 原图验证成功！")
+            found = verify
+
+    elapsed = time.time() - t0
+
+    # 清理缩小用的临时文件
+    if did_shrink and os.path.exists(shrunk_path):
+        os.remove(shrunk_path)
+        _log(f"🧹 临时缩略图已删除")
+
+    if found:
+        _log(f"🎉 提取成功! 耗时={elapsed:.1f}s, 长度={found['wm_length']}, 内容='{found['text']}'")
+        return found
+
+    _log(f"😢 未能提取盲水印，耗时={elapsed:.1f}s")
     return {"text": "无法自动检测水印长度，未能提取到盲水印", "success": False, "wm_length": None}
 
 
+# ── 单次提取 ──────────────────────────────────────────
+
 def extract(input_path: str, wm_length: int, password: str = "") -> dict:
-    """从图片中提取文本盲水印。
-
-    Args:
-        input_path: 输入图片路径
-        wm_length: 水印比特长度（嵌入时由 embed() 返回）
-        password: 提取密码（留空使用默认密码）
-
-    Returns:
-        dict: { text, success }
-          success=True  → 提取成功
-          success=False → 密码错误 或 没有提取到盲水印
-    """
+    """从图片中提取文本盲水印。"""
     password_int = _resolve_password(password)
 
     try:
@@ -210,8 +320,6 @@ def extract(input_path: str, wm_length: int, password: str = "") -> dict:
         if not wm_extract or not wm_extract.strip():
             return {"text": "没有提取到盲水印", "success": False}
 
-        # 密码验证：检测 replacement 字符
-        # 密码错误 → 比特顺序不对 → 解码出 replacement 字符
         if "�" in wm_extract:
             return {"text": "密码错误，无法提取水印", "success": False}
 

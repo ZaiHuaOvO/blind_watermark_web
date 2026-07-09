@@ -194,13 +194,53 @@ function getDebugPanel(storeName) {
   return panel;
 }
 
-function debugLog(panel, msg) {
+function debugLog(panel, msg, cssClass) {
   if (!panel) return;
   var time = new Date().toLocaleTimeString();
   var line = document.createElement('div');
-  line.textContent = '[' + time + '] ' + msg;
+  var timeSpan = document.createElement('span');
+  timeSpan.className = 'bwm-dlog-time';
+  timeSpan.textContent = '[' + time + ']';
+  line.appendChild(timeSpan);
+  var msgSpan = document.createElement('span');
+  if (cssClass) msgSpan.className = cssClass;
+  msgSpan.textContent = msg;
+  line.appendChild(msgSpan);
   panel.appendChild(line);
   panel.scrollTop = panel.scrollHeight;
+}
+
+var _serverLogPolling = null;
+
+function startServerLogPolling(panel, intervalMs) {
+  stopServerLogPolling();
+  if (!panel) return;
+  intervalMs = intervalMs || 2000;
+  _serverLogPolling = setInterval(async function () {
+    try {
+      var resp = await fetch('/api/watermark/logs');
+      if (!resp.ok) return;
+      var data = await resp.json();
+      if (data.logs && data.logs.length) {
+        data.logs.forEach(function (logMsg) {
+          var cssClass = 'bwm-dlog-info';
+          if (logMsg.indexOf('✅') >= 0 || logMsg.indexOf('🎉') >= 0 || logMsg.indexOf('成功') >= 0) cssClass = 'bwm-dlog-ok';
+          else if (logMsg.indexOf('❌') >= 0 || logMsg.indexOf('😢') >= 0 || logMsg.indexOf('失败') >= 0 || logMsg.indexOf('错误') >= 0) cssClass = 'bwm-dlog-err';
+          else if (logMsg.indexOf('⚠') >= 0 || logMsg.indexOf('注意') >= 0) cssClass = 'bwm-dlog-warn';
+          debugLog(panel, logMsg, cssClass + ' bwm-dlog-server');
+        });
+      }
+    } catch (e) {
+      // ignore polling errors
+    }
+  }, intervalMs);
+}
+
+function stopServerLogPolling() {
+  if (_serverLogPolling) {
+    clearInterval(_serverLogPolling);
+    _serverLogPolling = null;
+  }
 }
 
 function handleFileInput(inputId, storeName) {
@@ -478,8 +518,13 @@ async function submitEmbedSingleFromUrl() {
       allResults.push({ file_name: urls[i], success: false, error: e.message });
     }
   }
+  stopServerLogPolling();
   cleanupActiveProcess();
-  if (cancelled) { resultDiv.innerHTML = '<div class="bwm-alert bwm-alert--warning">处理已取消</div>'; setLoading(btn, false); return; }
+  if (cancelled) {
+    debugLog(debugPanel, '⛔ 处理已取消', 'bwm-dlog-warn');
+    resultDiv.innerHTML = '<div class="bwm-alert bwm-alert--warning">处理已取消</div>'; setLoading(btn, false); return;
+  }
+  debugLog(debugPanel, '✅ 批量提取完成！', 'bwm-dlog-ok');
   renderUrlResults(allResults, resultDiv, zipData, 'watermarked_url.zip', '嵌入');
   setLoading(btn, false);
 }
@@ -541,6 +586,13 @@ async function submitExtractSingleFromUrl() {
   cleanupActiveProcess();
   var resultDiv = document.getElementById('extractResultSingle');
   resultDiv.innerHTML = '';
+  var debugPanel = getDebugPanel('extractSingle');
+  if (debugPanel) { debugPanel.innerHTML = ''; debugPanel.style.display = 'block';
+    document.getElementById('toggleDebugBtn').textContent = '隐藏调试';
+    document.getElementById('toggleDebugBtn').style.opacity = '1';
+  }
+  debugLog(debugPanel, '🚀 开始从 URL 提取盲水印...', 'bwm-dlog-ok');
+  startServerLogPolling(debugPanel, 1500);
   var controller = startCancelableProcess('extractResultSingle');
   var signal = controller.signal;
   var results = []; var cancelled = false;
@@ -565,8 +617,13 @@ async function submitExtractSingleFromUrl() {
       results.push({ file_name: urls[i], text: e.message, success: false });
     }
   }
+  stopServerLogPolling();
   cleanupActiveProcess();
-  if (cancelled) { resultDiv.innerHTML = '<div class="bwm-alert bwm-alert--warning">处理已取消</div>'; setLoading(btn, false); return; }
+  if (cancelled) {
+    debugLog(debugPanel, '⛔ 处理已取消', 'bwm-dlog-warn');
+    resultDiv.innerHTML = '<div class="bwm-alert bwm-alert--warning">处理已取消</div>'; setLoading(btn, false); return;
+  }
+  debugLog(debugPanel, '✅ 提取完成！', 'bwm-dlog-ok');
   renderExtractUrlResults(results, resultDiv, '提取');
   setLoading(btn, false);
 }
@@ -580,6 +637,13 @@ async function submitExtractBatchFromUrl() {
   cleanupActiveProcess();
   var resultDiv = document.getElementById('extractResultBatch');
   resultDiv.innerHTML = '';
+  var debugPanel = getDebugPanel('extractBatch');
+  if (debugPanel) { debugPanel.innerHTML = ''; debugPanel.style.display = 'block';
+    document.getElementById('toggleDebugBtn').textContent = '隐藏调试';
+    document.getElementById('toggleDebugBtn').style.opacity = '1';
+  }
+  debugLog(debugPanel, '🚀 开始从 URL 批量提取盲水印...', 'bwm-dlog-ok');
+  startServerLogPolling(debugPanel, 2000);
   var controller = startCancelableProcess('extractResultBatch');
   var signal = controller.signal;
   var results = []; var cancelled = false;
@@ -604,8 +668,13 @@ async function submitExtractBatchFromUrl() {
       results.push({ file_name: urls[i], text: e.message, success: false });
     }
   }
+  stopServerLogPolling();
   cleanupActiveProcess();
-  if (cancelled) { resultDiv.innerHTML = '<div class="bwm-alert bwm-alert--warning">处理已取消</div>'; setLoading(btn, false); return; }
+  if (cancelled) {
+    debugLog(debugPanel, '⛔ 处理已取消', 'bwm-dlog-warn');
+    resultDiv.innerHTML = '<div class="bwm-alert bwm-alert--warning">处理已取消</div>'; setLoading(btn, false); return;
+  }
+  debugLog(debugPanel, '✅ 批量提取完成！', 'bwm-dlog-ok');
   renderExtractUrlResults(results, resultDiv, '提取');
   setLoading(btn, false);
 }
@@ -1100,6 +1169,15 @@ async function submitExtractSingle() {
   cleanupActiveProcess();
   var resultDiv = document.getElementById('extractResultSingle');
   resultDiv.innerHTML = '';
+  var debugPanel = getDebugPanel('extractSingle');
+  if (debugPanel) {
+    debugPanel.innerHTML = '';
+    debugPanel.style.display = 'block';
+    document.getElementById('toggleDebugBtn').textContent = '隐藏调试';
+    document.getElementById('toggleDebugBtn').style.opacity = '1';
+  }
+  debugLog(debugPanel, '🚀 开始提取盲水印...', 'bwm-dlog-ok');
+  startServerLogPolling(debugPanel, 1500);
   var controller = startCancelableProcess('extractResultSingle');
   var signal = controller.signal;
   var results = []; var cancelled = false;
@@ -1122,8 +1200,13 @@ async function submitExtractSingle() {
       results.push({ file_name: files[i].name, text: e.message, success: false });
     }
   }
+  stopServerLogPolling();
   cleanupActiveProcess();
-  if (cancelled) { resultDiv.innerHTML = '<div class="bwm-alert bwm-alert--warning">处理已取消</div>'; setLoading(btn, false); return; }
+  if (cancelled) {
+    debugLog(debugPanel, '⛔ 处理已取消', 'bwm-dlog-warn');
+    resultDiv.innerHTML = '<div class="bwm-alert bwm-alert--warning">处理已取消</div>'; setLoading(btn, false); return;
+  }
+  debugLog(debugPanel, '✅ 提取完成！正在整理结果...', 'bwm-dlog-ok');
   var html = '<ul class="bwm-result-list">';
   results.forEach(function (r) {
     var icon = r.success ? '✅' : (r.text.indexOf('密码') >= 0 ? '🔑' : '❌');
@@ -1149,6 +1232,13 @@ async function submitExtractBatch() {
   cleanupActiveProcess();
   var resultDiv = document.getElementById('extractResultBatch');
   resultDiv.innerHTML = '';
+  var debugPanel = getDebugPanel('extractBatch');
+  if (debugPanel) { debugPanel.innerHTML = ''; debugPanel.style.display = 'block';
+    document.getElementById('toggleDebugBtn').textContent = '隐藏调试';
+    document.getElementById('toggleDebugBtn').style.opacity = '1';
+  }
+  debugLog(debugPanel, '🚀 开始批量提取盲水印...', 'bwm-dlog-ok');
+  startServerLogPolling(debugPanel, 2000);
   var controller = startCancelableProcess('extractResultBatch');
   var signal = controller.signal;
   var results = []; var cancelled = false;
@@ -1199,8 +1289,13 @@ async function submitExtractBatch() {
     }
   }
 
+  stopServerLogPolling();
   cleanupActiveProcess();
-  if (cancelled) { resultDiv.innerHTML = '<div class="bwm-alert bwm-alert--warning">处理已取消</div>'; setLoading(btn, false); return; }
+  if (cancelled) {
+    debugLog(debugPanel, '⛔ 处理已取消', 'bwm-dlog-warn');
+    resultDiv.innerHTML = '<div class="bwm-alert bwm-alert--warning">处理已取消</div>'; setLoading(btn, false); return;
+  }
+  debugLog(debugPanel, '✅ 批量提取完成！正在整理结果...', 'bwm-dlog-ok');
   var html = '<ul class="bwm-result-list">';
   results.forEach(function (r) {
     var icon = r.success ? '✅' : (r.text.indexOf('密码') >= 0 ? '🔑' : '❌');
@@ -1325,6 +1420,19 @@ function toggleDebugAll() {
   panels.forEach(function (p) { p.style.display = show ? 'block' : 'none'; });
   btn.textContent = show ? '隐藏调试' : '显示调试';
   btn.style.opacity = show ? '1' : '0.4';
+  // 显示时立即拉取服务器日志
+  if (show) {
+    panels.forEach(function (p) {
+      // 一次性拉取历史
+      fetch('/api/watermark/logs').then(function (r) { return r.json(); }).then(function (d) {
+        if (d.logs && d.logs.length) {
+          d.logs.forEach(function (l) {
+            debugLog(p, l, 'bwm-dlog-server');
+          });
+        }
+      }).catch(function () {});
+    });
+  }
 }
 
 document.addEventListener('DOMContentLoaded', function () {
