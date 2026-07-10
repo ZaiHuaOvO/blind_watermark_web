@@ -462,6 +462,40 @@ header p {
 .tool-card.placeholder .desc { color: #b8a898; }
 .tool-card.placeholder .icon { filter: grayscale(0.4); }
 
+/* ── 禁用卡片（待整修等不可点击状态）── */
+
+.tool-card--disabled {
+  cursor: default;
+  filter: grayscale(0.45);
+  opacity: 0.72;
+}
+
+.tool-card--disabled:hover {
+  transform: none;
+  box-shadow: 0 4px 18px rgba(142, 98, 68, 0.06);
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.tool-card--disabled:active {
+  transform: none;
+}
+
+.tool-card--disabled .icon {
+  filter: grayscale(0.4);
+}
+
+.tool-card--disabled .name {
+  color: #b0a090;
+}
+
+.tool-card--disabled .desc {
+  color: #b8a898;
+}
+
+.tool-card--disabled .corner-github {
+  pointer-events: auto;
+}
+
 /* ═══════════════════════════════════════════
    9. Footer
    ═══════════════════════════════════════════ */
