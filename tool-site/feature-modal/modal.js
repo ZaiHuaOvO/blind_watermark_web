@@ -94,6 +94,30 @@ var featureContent = {
     ].join('\n'),
   },
 
+  'aliyun': {
+    title: '云效助手',
+    icon: '🤖',
+    html: [
+      '<div style="text-align:center;margin-bottom:16px;">',
+      '  <span style="font-size:3rem;display:block;margin-bottom:8px;">🤖</span>',
+      '  <h2>云效助手</h2>',
+      '  <span class="feature-nine-tag tag-key" style="background:#fff3e0;color:#b88540;border-radius:10px;padding:2px 10px;font-size:0.7rem;font-weight:600;">仅再花可用</span>',
+      '</div>',
+      '<hr class="feature-divider">',
+      '<h3>📖 这是什么？</h3>',
+      '<p>基于云效 OpenAPI 开发的轻量级日报生成工具。只需点击一下，即可自动生成格式工整的工作日报。</p>',
+      '<h3>✨ 功能</h3>',
+      '<ul>',
+      '  <li><strong>一键日报</strong> — 自动对比今日与昨日的工作项，识别状态变化，生成 Markdown 日报</li>',
+      '  <li><strong>任务查询</strong> — 输入工作项编号（如 QXIV-282），查询任务详情及父任务信息</li>',
+      '  <li><strong>一键复制</strong> — 支持复制日报或任务信息，方便粘贴到需要的地方</li>',
+      '</ul>',
+      '<p>如果你也在使用云效需要类似的功能，可以联系再花。</p>',
+      '<hr class="feature-divider">',
+      '<p style="text-align:center;margin-top:18px;font-size:0.75rem;color:#c0b0a0;">- 再花 -</p>',
+    ].join('\n'),
+  },
+
   'about': {
     title: '关于工具箱',
     html: [
