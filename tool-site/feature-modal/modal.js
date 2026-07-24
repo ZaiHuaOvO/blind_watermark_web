@@ -99,7 +99,7 @@ var featureContent = {
     icon: '🤖',
     html: [
       '<div style="text-align:center;margin-bottom:16px;">',
-      '  <span style="font-size:3rem;display:block;margin-bottom:8px;">🤖</span>',
+      '  <span style="font-size:3rem;display:block;margin-bottom:8px;">☁️</span>',
       '  <h2>云效助手</h2>',
       '  <span class="feature-nine-tag tag-key" style="background:#fff3e0;color:#b88540;border-radius:10px;padding:2px 10px;font-size:0.7rem;font-weight:600;">仅再花可用</span>',
       '</div>',
